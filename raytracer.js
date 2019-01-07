@@ -1,3 +1,9 @@
+"use strict";
+
+//ALIAS UTILI
+var Vector3 = glMatrix.vec3;
+var Matrix4 = glMatrix.mat4;
+
 //CORE VARIABLES
 var canvas;
 var context;
@@ -10,7 +16,222 @@ var EPSILON = 0.00001; //error margins
 var scene;
 var camera;
 var surfaces;
+var materials;
+var aspect;
 //etc...
+
+//CLASSES PROTOTYPES
+class Camera {
+  constructor(eye,up,at) {
+    this.eye = Vector3.fromValues(eye[0],eye[1],eye[2]);   // Posizione della camera
+    this.up = Vector3.fromValues(up[0],up[1],up[2]);     // Inclinazione testa
+    this.at = Vector3.fromValues(at[0],at[1],at[2]);     // Direzione dello sguardo ??
+
+    //Ricavo il camera frame {u,v,w} dai vettori eye,at,up (lezione 8, slide 19)
+    // Il camera frame è necessario per usare le formule nel calcolo delle intersezioni
+    this.w = Vector3.normalize(Vector3.scale([], this.at, -1)); // - normalize(at);
+    this.u = Vector3.normalize(Vector3.cross([], up, w)); //normalize(up * w)
+    this.v = Vector3.cross([], w,u); //w * u;
+
+    //Calcolo la ViewMatrix
+    this.viewMatrix = makeViewMatrix();  
+  }
+
+  
+  makeViewMatrix() { //calcola la ViewMatrix
+    var eyeX = this.eye[0], eyeY = this.eye[1], eyeZ = this.eye[2];
+    var centerX = this.at[0], centerY = this.at[1], centerZ = this.at[2];
+    var upX = this.up[0], upY = this.up[1], upZ = this.up[2];
+    var fx, fy, fz, rlf, sx, sy, sz, rls, ux, uy, uz;
+    
+    fx = centerX - eyeX;
+    fy = centerY - eyeY;
+    fz = centerZ - eyeZ;
+    
+    // Normalize f.
+    rlf = 1 / Math.sqrt(fx*fx + fy*fy + fz*fz);
+    fx *= rlf;
+    fy *= rlf;
+    fz *= rlf;
+    
+    // Calculate cross product of f and up.
+    sx = fy * upZ - fz * upY;
+    sy = fz * upX - fx * upZ;
+    sz = fx * upY - fy * upX;
+    
+    // Normalize s.
+    rls = 1 / Math.sqrt(sx*sx + sy*sy + sz*sz);
+    sx *= rls;
+    sy *= rls;
+    sz *= rls;
+    
+    // Calculate cross product of s and f.
+    ux = sy * fz - sz * fy;
+    uy = sz * fx - sx * fz;
+    uz = sx * fy - sy * fx;
+    
+    // Set to this.
+    e = Matrix4.create();
+    e[0] = sx;
+    e[1] = ux;
+    e[2] = -fx;
+    e[3] = 0;
+    
+    e[4] = sy;
+    e[5] = uy;
+    e[6] = -fy;
+    e[7] = 0;
+    
+    e[8] = sz;
+    e[9] = uz;
+    e[10] = -fz;
+    e[11] = 0;
+    
+    e[12] = 0;
+    e[13] = 0;
+    e[14] = 0;
+    e[15] = 1;
+
+    return e;
+  }
+
+
+
+  castRay(x,y) {
+    //Raggio che passa per eye e (x,y,z_viewport)
+
+    //calcolo il coefficiente angolare
+    var r = new Ray(this.eye, Vector3.fromValues(x,y, this.viewDistance));
+    return r;
+    
+  }
+}
+
+//Surfaces
+class Sphere {
+  constructor(center, radius, material) {
+    this.center = center;
+    this.radius = radius;
+    this.material = material;
+  }
+
+  intersects(ray,) {
+    /* //Implementa formulaccia sul file "Ray Tracing in a Weekend"
+    var oc = Vector3.subtract([], ray.getOrigin(), this.center); //r.origin - this.center
+    var a = Vector3.dot([], r.getDirection(), r.getDirection());
+    var b = 2 * Vector3.dot([], oc, r.getDirection()); //2* oc *dot* r.direction
+    
+    var ocdotoc = Vector3.dot([], oc, oc);
+    var rcrossr = Vector3.cross([], this.radius, this.radius);
+    var c = Vector3.subtract([], ocdotoc, rcrossr); //oc *dot* oc - radius * radius
+
+    //Calcolo delta --> dot o cross???
+    //var delta = Vector3.dot([], b, b) - 4*Vector3.dot([], a,c); //bb - 4ac
+    var delta = b*b - a*c;
+
+    var t,p,normal;
+    if (delta > 0) {
+      t = -b - Math.sqrt(delta) / (2.0*a);
+      if (t > EPSILON) {
+        p = ray.pointAtParameter(t);
+        normal = Vector3.scale([], Vector3.subtract([],p,this.center), 1/radius); //normale alla sup della sfera: (hit - center) /radius
+        
+        return new Intersection(t,p,normal);
+      }
+      
+      t = -b + Math.sqrt(delta) / (2.0*a);
+      if (t > EPSILON) {
+        p = ray.pointAtParameter(t);
+        normal = Vector3.scale([], Vector3.subtract([],p,this.center), 1/radius); //normale alla sup della sfera: (hit - center) /radius
+        
+        return new Intersection(t,p,normal);
+      }
+    }
+    return false; */
+    
+    //Implementa formula sulle slide del prof
+    var p = ray.getOrigin();
+    var d = ray.getDirection();
+    var ddotp = Vector3.dot([], d,p);
+    var psquare = Vector3.dot([], p, p);
+    var dsquare = Vector3.dot([], d, d);
+
+    var t1 = (-ddotp + Math.sqrt(ddotp*ddotp - dsquare*(psquare-1))) / dsquare;
+    var t2 = (-ddotp - Math.sqrt(ddotp*ddotp - dsquare*(psquare-1))) / dsquare;
+
+    //Quale dei due usiamo??
+
+  }
+  
+  hitSurface(ray) { //wrapper per debug
+    return intersects(ray);
+  }
+}
+
+class Triangle {
+  constructor(p1, p2, p3, material) {
+    this.p1 = p1;
+    this.p2 = p2;
+    this.p3 = p3;
+    this.material = material;
+  }
+
+}
+
+//Ray-Intersect
+class Ray {
+  constructor(a,d) {
+    this.a = a; //origine
+    this.d = d; //direzione
+  }
+  
+  pointAtParameter(t) { 
+    //return A + t * d
+    var tmp;
+    //tmp = Vector3.add([],a,Vector3.scale([],d,t)); //non si capisce niente così
+    tmp[0] = this.A + t * d[0];
+    tmp[1] = this.A + t * d[1];
+    tmp[2] = this.A + t * d[2];
+    return tmp;
+  };
+  
+  getOrigin() {return this.a;}
+  getDirection() {return this.d;}
+  
+}
+
+class Intersection{
+  constructor(x,y,z) {
+    this.int = new Vector3(x,y,z);
+  }
+
+}
+
+//Lighting
+class Light{
+  constructor() {
+
+  }
+}
+class PointLight extends Light{
+  constructor() {
+    super();
+
+  }
+}
+
+class AmbientLight extends Light {
+  constructor() {
+    super();
+
+  }
+}
+
+class Material { //Forse è sufficiente usare i file caricati dal json
+  constructor() {
+
+  }
+}
 
 
 //initializes the canvas and drawing buffers
@@ -30,9 +251,21 @@ function loadSceneFile(filepath) {
   scene = Utils.loadJSON(filepath); //load the scene
 
   //TODO - set up camera
+  //set up camera
+  aspect = scene.camera.aspect;
+  camera = new Camera(scene.camera.eye, scene.camera.up, scene.camera.dir, scene.camera.at);
+  //camera.makeViewMatrix();
+
 
   //TODO - set up surfaces
-
+  for(var object in scene.surfaces) {
+    if (object.shape.equals("Sphere")) {
+      surfaces.push(new Sphere(object.center, object.radius, scene.materials[object.material]));
+    }
+    else if (object.shape.equals("Triangle")) {
+      surfaces.push(new Triangle(object.p1, object.p2, object.p3, scene.materials[object.material]));
+    }
+  }
 
   render(); //render the scene
 
@@ -42,14 +275,25 @@ function loadSceneFile(filepath) {
 //renders the scene
 function render() {
   var start = Date.now(); //for logging
+  h = 2*Math.tan(rad(fovy/2.0));
+  w = h * aspect;
 
+  for (var i = 0; i < canvas.width;  i++) { //indice bordo sinistro se i=0 (bordo destro se i = nx-1)
+    for (var j = 0; j < canvas.height; j++) {
+      u = (w*i/(canvas.width-1)) - w/2.0
+      v = (-h*j/(canvas.height-1)) + h/2.0
 
-  //TODO - fire a ray though each pixel
+      //TODO - fire a ray though each pixel
+      var ray = camera.castRay(u,v);
 
-  //TODO - calculate the intersection of that ray with the scene
+      //TODO - calculate the intersection of that ray with the scene
+      var hitSurface,t = s.intersect(ray,EPSILON,+inf);
 
-  //TODO - set the pixel to be the color of that intersection (using setPixel() method)
+      //TODO - set the pixel to be the color of that intersection (using setPixel() method)
+      if (hitSurface) imageBuffer.setPixel(u,v,white)
 
+    }
+  }
 
   //render the pixels that have been set
   context.putImageData(imageBuffer,0,0);
@@ -79,6 +323,7 @@ function setPixel(x, y, color){
 function rad(degrees){
   return degrees*Math.PI/180;
 }
+
 
 //on load, run the application
 $(document).ready(function(){

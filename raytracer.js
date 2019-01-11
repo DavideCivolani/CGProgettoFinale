@@ -1,7 +1,7 @@
 "use strict";
 //prova
 
-var filename = "assets/FullTest.json";
+var filename = "assets/SphereTest.json";
 
 //ALIAS UTILI
 var Vector3 = glMatrix.vec3;
@@ -19,22 +19,25 @@ var EPSILON = 0.00001; //error margins
 var scene;
 var camera;
 var surfaces = [];
-var materials;
+// var materials;
 var aspect;
 //etc...
 
 //CLASSES PROTOTYPES
 class Camera {
   constructor(eye,up,at) {
-    this.eye = Vector3.fromValues(eye[0],eye[1],eye[2]);   // Posizione della camera
-    this.up = Vector3.fromValues(up[0],up[1],up[2]);     // Inclinazione testa
-    this.at = Vector3.fromValues(at[0],at[1],at[2]);     // Direzione dello sguardo ??
+    this.eye = Vector3.fromValues(eye[0],eye[1],eye[2]);   // Posizione della camera  (e)
+    this.up = Vector3.fromValues(up[0],up[1],up[2]);     // Inclinazione testa        (t)
+    this.at = Vector3.fromValues(at[0],at[1],at[2]);     // Direzione dello sguardo   (g) 
 
     //Ricavo il camera frame {u,v,w} dai vettori eye,at,up (lezione 8, slide 19)
-    //Il camera frame è necessario per usare le formule nel calcolo delle intersezioni
-    this.w = Vector3.normalize([], Vector3.scale([], this.at, -1)); // - normalize(at);
+    // Il camera frame è necessario per usare le formule nel calcolo delle intersezioni
+    // this.w = Vector3.normalize([], Vector3.scale([], this.at, -1)); // - normalize(at);
+    this.w = Vector3.scale([], Vector3.normalize([], this.at), -1);
     this.u = Vector3.normalize([], Vector3.cross([], this.up, this.w)); //normalize(up * w)
     this.v = Vector3.cross([], this.w, this.u); //w * u;
+
+    // console.log(this.w, this.u, this.v);
 
     //Calcolo la ViewMatrix
     //this.viewMatrix = makeViewMatrix();
@@ -101,11 +104,14 @@ class Camera {
 
 
   castRay(x,y) {
-    //Calcolo la direzione del raggio 
+    //Calcolo la direzione del raggio
+    // console.log(x, y);
+
     var dir = Vector3.create();
     dir[0] = - 1 * this.w[0] + x * this.u[0] + y * this.v[0];
     dir[1] = - 1 * this.w[1] + x * this.u[1] + y * this.v[1];
     dir[2] = - 1 * this.w[2] + x * this.u[2] + y * this.v[2];
+    console.log(dir);
 
     var r = new Ray(this.eye, dir);
     return r;
@@ -288,16 +294,16 @@ function render() {
   h = 2*Math.tan(rad(scene.camera.fovy/2.0));
   w = h * aspect;
 
-  for (var i = 0; i < canvas.width;  i++) { //indice bordo sinistro se i=0 (bordo destro se i = nx-1)
-    for (var j = 0; j < canvas.height; j++) {
+  for (var i = 0; i <= canvas.width;  i++) { //indice bordo sinistro se i=0 (bordo destro se i = nx-1)
+    for (var j = 0; j <= canvas.height; j++) {
       u = (w*i/(canvas.width-1)) - w/2.0;
       v = (-h*j/(canvas.height-1)) + h/2.0;
 
       //TODO - fire a ray though each pixel
-      var ray = camera.castRay(u,v);
+      var ray = camera.castRay(u, v);
 
       //TODO - calculate the intersection of that ray with the scene
-      //var hitSurface,t = s.intersect(ray,EPSILON,+inf);
+      // var hitSurface,t = s.intersect(ray,EPSILON,+inf);
 
       //TODO - set the pixel to be the color of that intersection (using setPixel() method)
       //if (hitSurface) imageBuffer.setPixel(u,v,white)

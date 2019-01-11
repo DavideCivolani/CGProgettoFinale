@@ -1,6 +1,8 @@
 "use strict";
 //prova
 
+var filename = "assets/FullTest.json";
+
 //ALIAS UTILI
 var Vector3 = glMatrix.vec3;
 var Matrix4 = glMatrix.mat4;
@@ -29,13 +31,13 @@ class Camera {
     this.at = Vector3.fromValues(at[0],at[1],at[2]);     // Direzione dello sguardo ??
 
     //Ricavo il camera frame {u,v,w} dai vettori eye,at,up (lezione 8, slide 19)
-    // Il camera frame è necessario per usare le formule nel calcolo delle intersezioni
-    this.w = Vector3.normalize(Vector3.scale([], this.at, -1)); // - normalize(at);
-    this.u = Vector3.normalize(Vector3.cross([], up, w)); //normalize(up * w)
-    this.v = Vector3.cross([], w,u); //w * u;
+    //Il camera frame è necessario per usare le formule nel calcolo delle intersezioni
+    this.w = Vector3.normalize([], Vector3.scale([], this.at, -1)); // - normalize(at);
+    this.u = Vector3.normalize([], Vector3.cross([], this.up, this.w)); //normalize(up * w)
+    this.v = Vector3.cross([], this.w, this.u); //w * u;
 
     //Calcolo la ViewMatrix
-    this.viewMatrix = makeViewMatrix();  
+    //this.viewMatrix = makeViewMatrix();
   }
 
   
@@ -72,7 +74,7 @@ class Camera {
     uz = sx * fy - sy * fx;
     
     // Set to this.
-    e = Matrix4.create();
+    var e = Matrix4.create();
     e[0] = sx;
     e[1] = ux;
     e[2] = -fx;
@@ -99,10 +101,13 @@ class Camera {
 
 
   castRay(x,y) {
-    //Raggio che passa per eye e (x,y,z_viewport)
+    //Calcolo la direzione del raggio 
+    var dir = Vector3.create();
+    dir[0] = - 1 * this.w[0] + x * this.u[0] + y * this.v[0];
+    dir[1] = - 1 * this.w[1] + x * this.u[1] + y * this.v[1];
+    dir[2] = - 1 * this.w[2] + x * this.u[2] + y * this.v[2];
 
-    //calcolo il coefficiente angolare
-    var r = new Ray(this.eye, Vector3.fromValues(x,y, this.viewDistance));
+    var r = new Ray(this.eye, dir);
     return r;
     
   }
@@ -181,23 +186,23 @@ class Triangle {
 
 //Ray-Intersect
 class Ray {
-  constructor(a,d) {
+  constructor(a,dir) {
     this.a = a; //origine
-    this.d = d; //direzione
+    this.dir = dir; //direzione
   }
   
-  pointAtParameter(t) { 
+  pointAtParameter(t) {
     //return A + t * d
     var tmp;
     //tmp = Vector3.add([],a,Vector3.scale([],d,t)); //non si capisce niente così
-    tmp[0] = this.A + t * d[0];
-    tmp[1] = this.A + t * d[1];
-    tmp[2] = this.A + t * d[2];
+    tmp[0] = this.a + t * dir[0];
+    tmp[1] = this.a + t * dir[1];
+    tmp[2] = this.a + t * dir[2];
     return tmp;
   };
   
   getOrigin() {return this.a;}
-  getDirection() {return this.d;}
+  getDirection() {return this.dir;}
   
 }
 
@@ -241,7 +246,7 @@ function init() {
   context = canvas.getContext("2d");
   imageBuffer = context.createImageData(canvas.width, canvas.height); //buffer for pixels
 
-  loadSceneFile("assets/SphereTest.json");
+  loadSceneFile(filename);
 
 
 }
@@ -251,23 +256,24 @@ function init() {
 function loadSceneFile(filepath) {
   scene = Utils.loadJSON(filepath); //load the scene
 
+  // console.log(scene.camera); loading is ok
+
   //TODO - set up camera
   //set up camera
   aspect = scene.camera.aspect;
   camera = new Camera(scene.camera.eye, scene.camera.up, scene.camera.at);
-  //camera.makeViewMatrix();
-
+  camera.makeViewMatrix();
 
   //TODO - set up surfaces
-  for(var i;  i < scene.surfaces.length;  i++) {
-    var object = scene.surfaces[i];
+  for (var i = 0; i < scene.surfaces.length; i++) {
 
-    if (object.shape == "Sphere") {
-      surfaces.push(new Sphere(object.center, object.radius, scene.materials[object.materials]));
+    if (scene.surfaces[i].shape == "Sphere") {
+      surfaces.push(new Sphere(scene.surfaces[i].center, scene.surfaces[i].radius, scene.surfaces[i].materials));
     }
-    else if (object.shape == "Triangle") {
-      surfaces.push(new Triangle(object.p1, object.p2, object.p3, scene.materials[object.materials]));
+    if (scene.surfaces[i].shape == "Triangle") {
+      surfaces.push(new Triangle(scene.surfaces[i].p1, scene.surfaces[i].p2, scene.surfaces[i].p3, scene.surfaces[i].material));
     }
+
   }
 
   render(); //render the scene
@@ -277,23 +283,24 @@ function loadSceneFile(filepath) {
 
 //renders the scene
 function render() {
+  var h,w,u,v,s;
   var start = Date.now(); //for logging
-  h = 2*Math.tan(rad(fovy/2.0));
+  h = 2*Math.tan(rad(scene.camera.fovy/2.0));
   w = h * aspect;
 
   for (var i = 0; i < canvas.width;  i++) { //indice bordo sinistro se i=0 (bordo destro se i = nx-1)
     for (var j = 0; j < canvas.height; j++) {
-      u = (w*i/(canvas.width-1)) - w/2.0
-      v = (-h*j/(canvas.height-1)) + h/2.0
+      u = (w*i/(canvas.width-1)) - w/2.0;
+      v = (-h*j/(canvas.height-1)) + h/2.0;
 
       //TODO - fire a ray though each pixel
       var ray = camera.castRay(u,v);
 
       //TODO - calculate the intersection of that ray with the scene
-      var hitSurface,t = s.intersect(ray,EPSILON,+inf);
+      //var hitSurface,t = s.intersect(ray,EPSILON,+inf);
 
       //TODO - set the pixel to be the color of that intersection (using setPixel() method)
-      if (hitSurface) imageBuffer.setPixel(u,v,white)
+      //if (hitSurface) imageBuffer.setPixel(u,v,white)
 
     }
   }

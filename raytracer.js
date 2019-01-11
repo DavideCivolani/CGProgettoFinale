@@ -103,15 +103,13 @@ class Camera {
 
 
 
-  castRay(x,y) {
-    //Calcolo la direzione del raggio
-    // console.log(x, y);
-
+  castRay(x,y) { //calcola il raggio che parte dalla camera e interseca il punto (x,y) nel rettangolo di vista
+    //Calcolo la direzione del raggio.
     var dir = Vector3.create();
-    dir[0] = - 1 * this.w[0] + x * this.u[0] + y * this.v[0];
-    dir[1] = - 1 * this.w[1] + x * this.u[1] + y * this.v[1];
-    dir[2] = - 1 * this.w[2] + x * this.u[2] + y * this.v[2];
-    console.log(dir);
+    var d = 1; //per ipotesi dalle specifiche
+    dir[0] = - d * this.w[0] + x * this.u[0] + y * this.v[0];
+    dir[1] = - d * this.w[1] + x * this.u[1] + y * this.v[1];
+    dir[2] = - d * this.w[2] + x * this.u[2] + y * this.v[2];
 
     var r = new Ray(this.eye, dir);
     return r;
@@ -127,7 +125,7 @@ class Sphere {
     this.material = material;
   }
 
-  intersects(ray,) {
+  intersects(ray) {
     /* //Implementa formulaccia sul file "Ray Tracing in a Weekend"
     var oc = Vector3.subtract([], ray.getOrigin(), this.center); //r.origin - this.center
     var a = Vector3.dot([], r.getDirection(), r.getDirection());
@@ -162,14 +160,21 @@ class Sphere {
     return false; */
     
     //Implementa formula sulle slide del prof
-    var p = ray.getOrigin();
+    var p = Vector3.subtract([], ray.getOrigin(), this.center); //e - c
     var d = ray.getDirection();
     var ddotp = Vector3.dot([], d,p);
     var psquare = Vector3.dot([], p, p);
     var dsquare = Vector3.dot([], d, d);
 
-    var t1 = (-ddotp + Math.sqrt(ddotp*ddotp - dsquare*(psquare-1))) / dsquare;
-    var t2 = (-ddotp - Math.sqrt(ddotp*ddotp - dsquare*(psquare-1))) / dsquare;
+    var delta = ddotp*ddotp - dsquare*(psquare - this.radius*this.radius);
+    if (delta >= 0) {
+      var t1 = (-ddotp + Math.sqrt(delta)) / dsquare;
+      var t2 = (-ddotp - Math.sqrt(delta)) / dsquare;
+
+      return t1;
+    } else {
+      return false;
+    }
 
     //Quale dei due usiamo??
 
@@ -302,6 +307,12 @@ function render() {
       //TODO - fire a ray though each pixel
       var ray = camera.castRay(u, v);
 
+      var t = false;
+      for (var k = 0; k < surfaces.length; k++) {
+        t = surfaces[k].intersects(ray);
+      }
+      if (t != false) imageBuffer.setPixel(u, v, red);
+
       //TODO - calculate the intersection of that ray with the scene
       // var hitSurface,t = s.intersect(ray,EPSILON,+inf);
 
@@ -357,7 +368,9 @@ $(document).ready(function(){
     var x = e.pageX - $('#canvas').offset().left;
     var y = e.pageY - $('#canvas').offset().top;
     DEBUG = true;
-    camera.castRay(x,y); //cast a ray through the point
+    u = (w*x/(canvas.width-1)) - w/2.0;
+    v = (-h*y/(canvas.height-1)) + h/2.0;
+    camera.castRay(u,v); //cast a ray through the point
     DEBUG = false;
   });
 

@@ -1,6 +1,8 @@
 "use strict";
 //prova
 
+var filename = "assets/FullTest.json";
+
 //ALIAS UTILI
 var Vector3 = glMatrix.vec3;
 var Matrix4 = glMatrix.mat4;
@@ -16,7 +18,7 @@ var EPSILON = 0.00001; //error margins
 //scene to render
 var scene;
 var camera;
-var surfaces;
+var surfaces = [];
 var materials;
 var aspect;
 //etc...
@@ -30,12 +32,12 @@ class Camera {
 
     //Ricavo il camera frame {u,v,w} dai vettori eye,at,up (lezione 8, slide 19)
     // Il camera frame è necessario per usare le formule nel calcolo delle intersezioni
-    this.w = Vector3.normalize(Vector3.scale([], this.at, -1)); // - normalize(at);
-    this.u = Vector3.normalize(Vector3.cross([], up, w)); //normalize(up * w)
-    this.v = Vector3.cross([], w,u); //w * u;
+    // this.w = Vector3.normalize(Vector3.scale([], this.at, -1)); // - normalize(at);
+    // this.u = Vector3.normalize(Vector3.cross([], up, w)); //normalize(up * w)
+    // this.v = Vector3.cross([], w,u); //w * u;
 
-    //Calcolo la ViewMatrix
-    this.viewMatrix = makeViewMatrix();  
+    // //Calcolo la ViewMatrix
+    // this.viewMatrix = makeViewMatrix();  
   }
 
   
@@ -190,9 +192,9 @@ class Ray {
     //return A + t * d
     var tmp;
     //tmp = Vector3.add([],a,Vector3.scale([],d,t)); //non si capisce niente così
-    tmp[0] = this.A + t * d[0];
-    tmp[1] = this.A + t * d[1];
-    tmp[2] = this.A + t * d[2];
+    tmp[0] = this.a + t * d[0];
+    tmp[1] = this.a + t * d[1];
+    tmp[2] = this.a + t * d[2];
     return tmp;
   };
   
@@ -241,7 +243,7 @@ function init() {
   context = canvas.getContext("2d");
   imageBuffer = context.createImageData(canvas.width, canvas.height); //buffer for pixels
 
-  loadSceneFile("assets/SphereTest.json");
+  loadSceneFile(filename);
 
 
 }
@@ -251,21 +253,24 @@ function init() {
 function loadSceneFile(filepath) {
   scene = Utils.loadJSON(filepath); //load the scene
 
+  // console.log(scene.camera); loading is ok
+
   //TODO - set up camera
   //set up camera
   aspect = scene.camera.aspect;
-  camera = new Camera(scene.camera.eye, scene.camera.up, scene.camera.dir, scene.camera.at);
+  camera = new Camera(scene.camera.eye, scene.camera.up, scene.camera.at);
   //camera.makeViewMatrix();
 
-
   //TODO - set up surfaces
-  for(var object in scene.surfaces) {
-    if (object.shape.equals("Sphere")) {
-      surfaces.push(new Sphere(object.center, object.radius, scene.materials[object.material]));
+  for (var i = 0; i < scene.surfaces.length; i++) {
+
+    if (scene.surfaces[i].shape == "Sphere") {
+      surfaces.push(new Sphere(scene.surfaces[i].center, scene.surfaces[i].radius, scene.surfaces[i].materials));
     }
-    else if (object.shape.equals("Triangle")) {
-      surfaces.push(new Triangle(object.p1, object.p2, object.p3, scene.materials[object.material]));
+    if (scene.surfaces[i].shape == "Triangle") {
+      surfaces.push(new Triangle(scene.surfaces[i].p1, scene.surfaces[i].p2, scene.surfaces[i].p3, scene.surfaces[i].material));
     }
+
   }
 
   render(); //render the scene

@@ -162,16 +162,22 @@ class Sphere {
     //Implementa formula sulle slide del prof
     var p = Vector3.subtract([], ray.getOrigin(), this.center); //e - c
     var d = ray.getDirection();
-    var ddotp = Vector3.dot([], d,p);
-    var psquare = Vector3.dot([], p, p);
-    var dsquare = Vector3.dot([], d, d);
-
+    //console.log("p: "+p+"; d: "+d);
+    
+    var ddotp = Vector3.dot(d,p);
+    //console.log(ddotp);
+    var psquare = Vector3.dot(p, p);
+    //console.log(psquare);
+    var dsquare = Vector3.dot(d, d);
+    //console.log(dsquare);
+    
     var delta = ddotp*ddotp - dsquare*(psquare - this.radius*this.radius);
+    
     if (delta >= 0) {
       var t1 = (-ddotp + Math.sqrt(delta)) / dsquare;
       var t2 = (-ddotp - Math.sqrt(delta)) / dsquare;
 
-      return t1;
+      return t2;
     } else {
       return false;
     }
@@ -287,14 +293,13 @@ function loadSceneFile(filepath) {
 
   }
 
-  render(); //render the scene
-
 }
 
 
 //renders the scene
 function render() {
   var h,w,u,v,s;
+  var backgroundcolor = [0,0,0];
   var start = Date.now(); //for logging
   h = 2*Math.tan(rad(scene.camera.fovy/2.0));
   w = h * aspect;
@@ -306,18 +311,17 @@ function render() {
 
       //TODO - fire a ray though each pixel
       var ray = camera.castRay(u, v);
+      //if (i < 1 && j< 10) console.log(ray);
 
       var t = false;
       for (var k = 0; k < surfaces.length; k++) {
+        //calculate the intersection of that ray with the scene
         t = surfaces[k].intersects(ray);
+        
+        //set the pixel to be the color of that intersection (using setPixel() method)
+        if (t == false) setPixel(i, j, backgroundcolor);
+        else setPixel(i, j, [255,0,0]);
       }
-      if (t != false) imageBuffer.setPixel(u, v, red);
-
-      //TODO - calculate the intersection of that ray with the scene
-      // var hitSurface,t = s.intersect(ray,EPSILON,+inf);
-
-      //TODO - set the pixel to be the color of that intersection (using setPixel() method)
-      //if (hitSurface) imageBuffer.setPixel(u,v,white)
 
     }
   }
@@ -368,6 +372,8 @@ $(document).ready(function(){
     var x = e.pageX - $('#canvas').offset().left;
     var y = e.pageY - $('#canvas').offset().top;
     DEBUG = true;
+    h = 2*Math.tan(rad(scene.camera.fovy/2.0));
+    w = h * aspect;
     u = (w*x/(canvas.width-1)) - w/2.0;
     v = (-h*y/(canvas.height-1)) + h/2.0;
     camera.castRay(u,v); //cast a ray through the point

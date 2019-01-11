@@ -11,6 +11,8 @@ var Matrix4 = glMatrix.mat4;
 var canvas;
 var context;
 var imageBuffer;
+var heigth;
+var width;
 
 var DEBUG = false; //whether to show debug messages
 var EPSILON = 0.00001; //error margins
@@ -21,6 +23,7 @@ var camera;
 var surfaces = [];
 // var materials;
 var aspect;
+
 //etc...
 
 //CLASSES PROTOTYPES
@@ -112,6 +115,7 @@ class Camera {
     dir[2] = - d * this.w[2] + x * this.u[2] + y * this.v[2];
 
     var r = new Ray(this.eye, dir);
+    if (DEBUG) console.log("dir:"+dir);
     return r;
     
   }
@@ -165,30 +169,28 @@ class Sphere {
     //console.log("p: "+p+"; d: "+d);
     
     var ddotp = Vector3.dot(d,p);
-    //console.log(ddotp);
+    if (DEBUG) console.log("d⋅p:"+ddotp);
     var psquare = Vector3.dot(p, p);
-    //console.log(psquare);
+    if (DEBUG) console.log("p⋅p: "+psquare);
     var dsquare = Vector3.dot(d, d);
-    //console.log(dsquare);
+    if (DEBUG) console.log("d⋅d"+dsquare);
     
     var delta = ddotp*ddotp - dsquare*(psquare - this.radius*this.radius);
+    if (DEBUG) console.log("delta: "+delta);
+
     
     if (delta >= 0) {
       var t1 = (-ddotp + Math.sqrt(delta)) / dsquare;
       var t2 = (-ddotp - Math.sqrt(delta)) / dsquare;
+      
+      //Quale dei due usiamo??
+      return t1;
+    } 
+    else return false;
 
-      return t2;
-    } else {
-      return false;
-    }
-
-    //Quale dei due usiamo??
 
   }
   
-  hitSurface(ray) { //wrapper per debug
-    return intersects(ray);
-  }
 }
 
 class Triangle {
@@ -265,25 +267,23 @@ function init() {
 
   loadSceneFile(filename);
 
-
 }
 
 
 //loads and "parses" the scene file at the given path
 function loadSceneFile(filepath) {
   scene = Utils.loadJSON(filepath); //load the scene
-
+  heigth = 2*Math.tan(rad(scene.camera.fovy/2.0));
+  width = heigth * aspect;
   // console.log(scene.camera); loading is ok
 
-  //TODO - set up camera
   //set up camera
   aspect = scene.camera.aspect;
   camera = new Camera(scene.camera.eye, scene.camera.up, scene.camera.at);
-  camera.makeViewMatrix();
+  camera.makeViewMatrix(); //a che serve?
 
-  //TODO - set up surfaces
+  //set up surfaces
   for (var i = 0; i < scene.surfaces.length; i++) {
-
     if (scene.surfaces[i].shape == "Sphere") {
       surfaces.push(new Sphere(scene.surfaces[i].center, scene.surfaces[i].radius, scene.surfaces[i].materials));
     }
@@ -292,6 +292,9 @@ function loadSceneFile(filepath) {
     }
 
   }
+
+  //set up lights
+
 
 }
 
@@ -320,7 +323,7 @@ function render() {
         
         //set the pixel to be the color of that intersection (using setPixel() method)
         if (t == false) setPixel(i, j, backgroundcolor);
-        else setPixel(i, j, [255,0,0]);
+        else setPixel(i, j, [255,255,255]);
       }
 
     }
@@ -365,6 +368,7 @@ $(document).ready(function(){
   $('#load_scene_button').click(function(){
     var filepath = 'assets/'+$('#scene_file_input').val()+'.json';
     loadSceneFile(filepath);
+    render();
   });
 
   //debugging - cast a ray through the clicked pixel with DEBUG messaging on
@@ -372,11 +376,11 @@ $(document).ready(function(){
     var x = e.pageX - $('#canvas').offset().left;
     var y = e.pageY - $('#canvas').offset().top;
     DEBUG = true;
-    h = 2*Math.tan(rad(scene.camera.fovy/2.0));
-    w = h * aspect;
-    u = (w*x/(canvas.width-1)) - w/2.0;
-    v = (-h*y/(canvas.height-1)) + h/2.0;
-    camera.castRay(u,v); //cast a ray through the point
+    var u = (width*x/(canvas.width-1)) - width/2.0;
+    var v = (-heigth*y/(canvas.height-1)) + heigth/2.0;
+    
+    var ray = camera.castRay(u,v); //cast a ray through the point
+    for (var obj in surfaces) surfaces[obj].intersects(ray);
     DEBUG = false;
   });
 

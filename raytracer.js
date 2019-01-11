@@ -16,7 +16,7 @@ var EPSILON = 0.00001; //error margins
 //scene to render
 var scene;
 var camera;
-var surfaces;
+var surfaces = [];
 var materials;
 var aspect;
 //etc...
@@ -254,17 +254,19 @@ function loadSceneFile(filepath) {
   //TODO - set up camera
   //set up camera
   aspect = scene.camera.aspect;
-  camera = new Camera(scene.camera.eye, scene.camera.up, scene.camera.dir, scene.camera.at);
+  camera = new Camera(scene.camera.eye, scene.camera.up, scene.camera.at);
   //camera.makeViewMatrix();
 
 
   //TODO - set up surfaces
-  for(var object in scene.surfaces) {
-    if (object.shape.equals("Sphere")) {
-      surfaces.push(new Sphere(object.center, object.radius, scene.materials[object.material]));
+  for(var i;  i < scene.surfaces.length;  i++) {
+    var object = scene.surfaces[i];
+
+    if (object.shape == "Sphere") {
+      surfaces.push(new Sphere(object.center, object.radius, scene.materials[object.materials]));
     }
-    else if (object.shape.equals("Triangle")) {
-      surfaces.push(new Triangle(object.p1, object.p2, object.p3, scene.materials[object.material]));
+    else if (object.shape == "Triangle") {
+      surfaces.push(new Triangle(object.p1, object.p2, object.p3, scene.materials[object.materials]));
     }
   }
 

@@ -177,12 +177,11 @@ class Sphere {
       var t1 = (-ddotp + Math.sqrt(delta)) / dsquare;
       var t2 = (-ddotp - Math.sqrt(delta)) / dsquare;
 
-      return t2;
-    } else {
-      return false;
-    }
+      //Quale dei due usiamo??
+      return t1;
+    } 
+    else return false;
 
-    //Quale dei due usiamo??
 
   }
   
@@ -265,7 +264,7 @@ function init() {
 
   loadSceneFile(filename);
 
-
+  render();
 }
 
 
@@ -320,7 +319,7 @@ function render() {
         
         //set the pixel to be the color of that intersection (using setPixel() method)
         if (t == false) setPixel(i, j, backgroundcolor);
-        else setPixel(i, j, [255,0,0]);
+        else setPixel(i, j, [255,255,255]);
       }
 
     }
@@ -359,12 +358,13 @@ function rad(degrees){
 //on load, run the application
 $(document).ready(function(){
   init();
-  render();
-
+  
   //load and render new scene
   $('#load_scene_button').click(function(){
     var filepath = 'assets/'+$('#scene_file_input').val()+'.json';
+    surfaces = [];
     loadSceneFile(filepath);
+    render();
   });
 
   //debugging - cast a ray through the clicked pixel with DEBUG messaging on

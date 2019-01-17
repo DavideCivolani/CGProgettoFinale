@@ -2,10 +2,12 @@
 //prova
 
 var filename = "assets/SphereTest.json";
+var test = 0;
 
 //ALIAS UTILI
 var Vector3 = glMatrix.vec3;
 var Matrix4 = glMatrix.mat4;
+var Matrix3 = glMatrix.mat3;
 
 //CORE VARIABLES
 var canvas;
@@ -130,38 +132,6 @@ class Sphere {
   }
 
   intersects(ray) {
-    /* //Implementa formulaccia sul file "Ray Tracing in a Weekend"
-    var oc = Vector3.subtract([], ray.getOrigin(), this.center); //r.origin - this.center
-    var a = Vector3.dot([], r.getDirection(), r.getDirection());
-    var b = 2 * Vector3.dot([], oc, r.getDirection()); //2* oc *dot* r.direction
-    
-    var ocdotoc = Vector3.dot([], oc, oc);
-    var rcrossr = Vector3.cross([], this.radius, this.radius);
-    var c = Vector3.subtract([], ocdotoc, rcrossr); //oc *dot* oc - radius * radius
-
-    //Calcolo delta --> dot o cross???
-    //var delta = Vector3.dot([], b, b) - 4*Vector3.dot([], a,c); //bb - 4ac
-    var delta = b*b - a*c;
-
-    var t,p,normal;
-    if (delta > 0) {
-      t = -b - Math.sqrt(delta) / (2.0*a);
-      if (t > EPSILON) {
-        p = ray.pointAtParameter(t);
-        normal = Vector3.scale([], Vector3.subtract([],p,this.center), 1/radius); //normale alla sup della sfera: (hit - center) /radius
-        
-        return new Intersection(t,p,normal);
-      }
-      
-      t = -b + Math.sqrt(delta) / (2.0*a);
-      if (t > EPSILON) {
-        p = ray.pointAtParameter(t);
-        normal = Vector3.scale([], Vector3.subtract([],p,this.center), 1/radius); //normale alla sup della sfera: (hit - center) /radius
-        
-        return new Intersection(t,p,normal);
-      }
-    }
-    return false; */
     
     //Implementa formula sulle slide del prof
     var p = Vector3.subtract([], ray.getOrigin(), this.center); //e - c
@@ -187,7 +157,6 @@ class Sphere {
       return t1;
     } 
     else return false;
-
 
   }
   
@@ -236,9 +205,9 @@ class Sphere {
 
 class Triangle {
   constructor(p1, p2, p3, material) {
-    this.a = p1;
-    this.b = p2;
-    this.c = p3;
+    this.a = p1; // a
+    this.b = p2; // b
+    this.c = p3; // c
     this.material = material;
 
     //Normale
@@ -248,15 +217,112 @@ class Triangle {
   }
 
   intersects(ray) {
-    //Implementa formule per intersezione geometrica (Lezione 24, slide 33)
+    /* //Implementa formule per intersezione geometrica (Lezione 24, slide 33)
     var t;
     t = Vector3.subtract([], this.a, ray.getOrigin()); //a-e
     t = Vector3.dot(t, this.normal);
     t = t / Vector3.dot(ray.getDirection(),this.normal);
-    return t;
+    
+    //TODO: Test inside edge
+    //vettore x = ?
+    
+    return t; */
 
-    //Test inside edge
+    //Metodo Matteo
+    var A = Matrix3.fromValues(
+      this.a[0]-this.b[0], this.a[0]-this.c[0], ray.dir[0],
+      this.a[1]-this.b[1], this.a[1]-this.c[1], ray.dir[1],
+      this.a[2]-this.b[2], this.a[2]-this.c[2], ray.dir[2]
+    );
 
+    var B = new Float32Array([
+      this.a[0]-ray.a[0],
+      this.a[1]-ray.a[1],
+      this.a[2]-ray.a[2]
+    ])
+    // var B = Matrix3.fromValues(
+    //   this.a[0]-ray.a[0],
+    //   this.a[1]-ray.a[1],
+    //   this.a[2]-ray.a[2]
+    // );
+
+    // metodo della inversa
+    // var invA = Matrix3.create();
+    // Matrix3.invert(invA,A);
+
+    // var x = Matrix3.create();
+    // Matrix3.multiply(x, invA, B);
+    
+    // metodo di cramer come sul libro
+    // var M = A[0]*(A[4]*A[8] - A[5]*A[7]) + A[3]*(A[2]*A[7] - A[1]*A[8]) + A[6]*(A[1]*A[5] - A[4]*A[2]);
+    // var beta = ( B[0]*(A[4]*A[8] - A[5]*A[7]) + B[1]*(A[2]*A[7] - A[2]*A[8]) + B[2]*(A[1]*A[5] - A[4]*A[2]) )/M;
+    // var gamma = ( A[8]*(A[0]*B[1] - B[0]*A[3]) + A[5]*(B[0]*A[6] - A[0]*B[2]) + A[2]*(A[3]*B[2] - B[1]*A[6]) )/M;
+    // var t = ( A[7]*(A[0]*B[1] - B[0]*A[3]) + A[4]*(B[0]*A[6] - A[0]*B[2]) + A[1]*(A[3]*B[2] - B[1]*A[6]) )/M;
+
+
+    
+    // metodo trovato online
+    var V = new Vector3.create();
+    Vector3.subtract(this.b, this.a, V);
+
+    var W = new Vector3.create();
+    Vector3.subtract(this.c, this.a, W);
+    
+    var n = new Vector3.fromValues(V[1]*W[2] - V[2]*W[1],
+                                   V[2]*W[0] - V[0]*W[2],
+                                   V[0]*W[1] - V[1]*W[0]);
+    
+    var N = [];
+    N[0] = n[0] / (Math.abs(n[0]) + Math.abs(n[1]) + Math.abs(n[2]));
+    N[1] = n[1] / (Math.abs(n[0]) + Math.abs(n[1]) + Math.abs(n[2]));
+    N[2] = n[2] / (Math.abs(n[0]) + Math.abs(n[1]) + Math.abs(n[2]));
+
+    var D = Vector3.dot(N, this.a);
+    var t = - ( Vector3.dot(N, ray.a) + D ) / Vector3.dot(N, ray.dir);
+
+    var P = new Vector3.create();
+    P[0] = ray.a[0] + t*ray.dir[0];
+    P[1] = ray.a[1] + t*ray.dir[1];
+    P[2] = ray.a[2] + t*ray.dir[2];
+
+    var edge0 = new Vector3.create();
+    Vector3.subtract(this.b, this.a, edge0);
+    var edge1 = new Vector3.create();
+    Vector3.subtract(this.c, this.b, edge1);
+    var edge2 = new Vector3.create();
+    Vector3.subtract(this.a, this.c, edge2);
+
+    var C0 = new Vector3.create();
+    Vector3.subtract(P, this.a, C0);
+    var C1 = new Vector3.create();
+    Vector3.subtract(P, this.b, C1);
+    var C2 = new Vector3.create();
+    Vector3.subtract(P, this.c, C2);
+
+    var cross0 = new Vector3.create();
+    Vector3.cross(edge0, C0, cross0);
+    var cross1 = new Vector3.create();
+    Vector3.cross(edge1, C1, cross1);
+    var cross2 = new Vector3.create();
+    Vector3.cross(edge2, C2, cross2);
+
+
+    if (Vector3.dot(N, cross0) > 0 &&
+        Vector3.dot(N, cross1) > 0 &&
+        Vector3.dot(N, cross2) > 0) return true;
+    else return false;
+
+
+    // if (test < 10) {
+    //   console.log(P);
+    //   test++;
+    // }
+
+    // if (beta > 0 && gamma > 0 && beta+gamma < 1) { // intersezione
+    //   // console.log("ok");
+    //   return t;
+    // }
+    // else return false;
   }
 
   getNormal(point) {return this.normal;}
@@ -326,6 +392,7 @@ function init() {
 
   loadSceneFile(filename);
 
+  render();
 }
 
 
@@ -449,11 +516,11 @@ function rad(degrees){
 //on load, run the application
 $(document).ready(function(){
   init();
-  render();
-
+  
   //load and render new scene
   $('#load_scene_button').click(function(){
     var filepath = 'assets/'+$('#scene_file_input').val()+'.json';
+    surfaces = [];
     loadSceneFile(filepath);
     render();
   });

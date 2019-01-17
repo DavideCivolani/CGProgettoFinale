@@ -2,15 +2,19 @@
 //prova
 
 var filename = "assets/SphereTest.json";
+var test = 0;
 
 //ALIAS UTILI
 var Vector3 = glMatrix.vec3;
 var Matrix4 = glMatrix.mat4;
+var Matrix3 = glMatrix.mat3;
 
 //CORE VARIABLES
 var canvas;
 var context;
 var imageBuffer;
+var heigth;
+var width;
 
 var DEBUG = false; //whether to show debug messages
 var EPSILON = 0.00001; //error margins
@@ -21,6 +25,7 @@ var camera;
 var surfaces = [];
 // var materials;
 var aspect;
+
 //etc...
 
 //CLASSES PROTOTYPES
@@ -112,6 +117,7 @@ class Camera {
     dir[2] = - d * this.w[2] + x * this.u[2] + y * this.v[2];
 
     var r = new Ray(this.eye, dir);
+    if (DEBUG) console.log("dir:"+dir);
     return r;
     
   }
@@ -126,38 +132,6 @@ class Sphere {
   }
 
   intersects(ray) {
-    /* //Implementa formulaccia sul file "Ray Tracing in a Weekend"
-    var oc = Vector3.subtract([], ray.getOrigin(), this.center); //r.origin - this.center
-    var a = Vector3.dot([], r.getDirection(), r.getDirection());
-    var b = 2 * Vector3.dot([], oc, r.getDirection()); //2* oc *dot* r.direction
-    
-    var ocdotoc = Vector3.dot([], oc, oc);
-    var rcrossr = Vector3.cross([], this.radius, this.radius);
-    var c = Vector3.subtract([], ocdotoc, rcrossr); //oc *dot* oc - radius * radius
-
-    //Calcolo delta --> dot o cross???
-    //var delta = Vector3.dot([], b, b) - 4*Vector3.dot([], a,c); //bb - 4ac
-    var delta = b*b - a*c;
-
-    var t,p,normal;
-    if (delta > 0) {
-      t = -b - Math.sqrt(delta) / (2.0*a);
-      if (t > EPSILON) {
-        p = ray.pointAtParameter(t);
-        normal = Vector3.scale([], Vector3.subtract([],p,this.center), 1/radius); //normale alla sup della sfera: (hit - center) /radius
-        
-        return new Intersection(t,p,normal);
-      }
-      
-      t = -b + Math.sqrt(delta) / (2.0*a);
-      if (t > EPSILON) {
-        p = ray.pointAtParameter(t);
-        normal = Vector3.scale([], Vector3.subtract([],p,this.center), 1/radius); //normale alla sup della sfera: (hit - center) /radius
-        
-        return new Intersection(t,p,normal);
-      }
-    }
-    return false; */
     
     //Implementa formula sulle slide del prof
     var p = Vector3.subtract([], ray.getOrigin(), this.center); //e - c
@@ -165,39 +139,133 @@ class Sphere {
     //console.log("p: "+p+"; d: "+d);
     
     var ddotp = Vector3.dot(d,p);
-    //console.log(ddotp);
+    if (DEBUG) console.log("d⋅p:"+ddotp);
     var psquare = Vector3.dot(p, p);
-    //console.log(psquare);
+    if (DEBUG) console.log("p⋅p: "+psquare);
     var dsquare = Vector3.dot(d, d);
-    //console.log(dsquare);
+    if (DEBUG) console.log("d⋅d"+dsquare);
     
     var delta = ddotp*ddotp - dsquare*(psquare - this.radius*this.radius);
+    if (DEBUG) console.log("delta: "+delta);
+
     
     if (delta >= 0) {
       var t1 = (-ddotp + Math.sqrt(delta)) / dsquare;
       var t2 = (-ddotp - Math.sqrt(delta)) / dsquare;
-
+      
       //Quale dei due usiamo??
       return t1;
     } 
     else return false;
 
-
   }
   
-  hitSurface(ray) { //wrapper per debug
-    return intersects(ray);
-  }
 }
 
 class Triangle {
   constructor(p1, p2, p3, material) {
-    this.p1 = p1;
-    this.p2 = p2;
-    this.p3 = p3;
+    this.a = p1; // a
+    this.b = p2; // b
+    this.c = p3; // c
     this.material = material;
   }
 
+  intersects(ray) {
+    var A = Matrix3.fromValues(
+      this.a[0]-this.b[0], this.a[0]-this.c[0], ray.dir[0],
+      this.a[1]-this.b[1], this.a[1]-this.c[1], ray.dir[1],
+      this.a[2]-this.b[2], this.a[2]-this.c[2], ray.dir[2]
+    );
+
+    var B = new Float32Array([
+      this.a[0]-ray.a[0],
+      this.a[1]-ray.a[1],
+      this.a[2]-ray.a[2]
+    ])
+    // var B = Matrix3.fromValues(
+    //   this.a[0]-ray.a[0],
+    //   this.a[1]-ray.a[1],
+    //   this.a[2]-ray.a[2]
+    // );
+
+    // metodo della inversa
+    // var invA = Matrix3.create();
+    // Matrix3.invert(invA,A);
+
+    // var x = Matrix3.create();
+    // Matrix3.multiply(x, invA, B);
+    
+    // metodo di cramer come sul libro
+    // var M = A[0]*(A[4]*A[8] - A[5]*A[7]) + A[3]*(A[2]*A[7] - A[1]*A[8]) + A[6]*(A[1]*A[5] - A[4]*A[2]);
+    // var beta = ( B[0]*(A[4]*A[8] - A[5]*A[7]) + B[1]*(A[2]*A[7] - A[2]*A[8]) + B[2]*(A[1]*A[5] - A[4]*A[2]) )/M;
+    // var gamma = ( A[8]*(A[0]*B[1] - B[0]*A[3]) + A[5]*(B[0]*A[6] - A[0]*B[2]) + A[2]*(A[3]*B[2] - B[1]*A[6]) )/M;
+    // var t = ( A[7]*(A[0]*B[1] - B[0]*A[3]) + A[4]*(B[0]*A[6] - A[0]*B[2]) + A[1]*(A[3]*B[2] - B[1]*A[6]) )/M;
+
+
+    
+    // metodo trovato online
+    var V = new Vector3.create();
+    Vector3.subtract(this.b, this.a, V);
+
+    var W = new Vector3.create();
+    Vector3.subtract(this.c, this.a, W);
+    
+    var n = new Vector3.fromValues(V[1]*W[2] - V[2]*W[1],
+                                   V[2]*W[0] - V[0]*W[2],
+                                   V[0]*W[1] - V[1]*W[0]);
+    
+    var N = [];
+    N[0] = n[0] / (Math.abs(n[0]) + Math.abs(n[1]) + Math.abs(n[2]));
+    N[1] = n[1] / (Math.abs(n[0]) + Math.abs(n[1]) + Math.abs(n[2]));
+    N[2] = n[2] / (Math.abs(n[0]) + Math.abs(n[1]) + Math.abs(n[2]));
+
+    var D = Vector3.dot(N, this.a);
+    var t = - ( Vector3.dot(N, ray.a) + D ) / Vector3.dot(N, ray.dir);
+
+    var P = new Vector3.create();
+    P[0] = ray.a[0] + t*ray.dir[0];
+    P[1] = ray.a[1] + t*ray.dir[1];
+    P[2] = ray.a[2] + t*ray.dir[2];
+
+    var edge0 = new Vector3.create();
+    Vector3.subtract(this.b, this.a, edge0);
+    var edge1 = new Vector3.create();
+    Vector3.subtract(this.c, this.b, edge1);
+    var edge2 = new Vector3.create();
+    Vector3.subtract(this.a, this.c, edge2);
+
+    var C0 = new Vector3.create();
+    Vector3.subtract(P, this.a, C0);
+    var C1 = new Vector3.create();
+    Vector3.subtract(P, this.b, C1);
+    var C2 = new Vector3.create();
+    Vector3.subtract(P, this.c, C2);
+
+    var cross0 = new Vector3.create();
+    Vector3.cross(edge0, C0, cross0);
+    var cross1 = new Vector3.create();
+    Vector3.cross(edge1, C1, cross1);
+    var cross2 = new Vector3.create();
+    Vector3.cross(edge2, C2, cross2);
+
+
+    if (Vector3.dot(N, cross0) > 0 &&
+        Vector3.dot(N, cross1) > 0 &&
+        Vector3.dot(N, cross2) > 0) return true;
+    else return false;
+
+
+    // if (test < 10) {
+    //   console.log(P);
+    //   test++;
+    // }
+
+    // if (beta > 0 && gamma > 0 && beta+gamma < 1) { // intersezione
+    //   // console.log("ok");
+    //   return t;
+    // }
+    // else return false;
+  }
 }
 
 //Ray-Intersect
@@ -271,18 +339,17 @@ function init() {
 //loads and "parses" the scene file at the given path
 function loadSceneFile(filepath) {
   scene = Utils.loadJSON(filepath); //load the scene
-
+  heigth = 2*Math.tan(rad(scene.camera.fovy/2.0));
+  width = heigth * aspect;
   // console.log(scene.camera); loading is ok
 
-  //TODO - set up camera
   //set up camera
   aspect = scene.camera.aspect;
   camera = new Camera(scene.camera.eye, scene.camera.up, scene.camera.at);
-  camera.makeViewMatrix();
+  camera.makeViewMatrix(); //a che serve?
 
-  //TODO - set up surfaces
+  //set up surfaces
   for (var i = 0; i < scene.surfaces.length; i++) {
-
     if (scene.surfaces[i].shape == "Sphere") {
       surfaces.push(new Sphere(scene.surfaces[i].center, scene.surfaces[i].radius, scene.surfaces[i].materials));
     }
@@ -291,6 +358,9 @@ function loadSceneFile(filepath) {
     }
 
   }
+
+  //set up lights
+
 
 }
 
@@ -372,11 +442,11 @@ $(document).ready(function(){
     var x = e.pageX - $('#canvas').offset().left;
     var y = e.pageY - $('#canvas').offset().top;
     DEBUG = true;
-    h = 2*Math.tan(rad(scene.camera.fovy/2.0));
-    w = h * aspect;
-    u = (w*x/(canvas.width-1)) - w/2.0;
-    v = (-h*y/(canvas.height-1)) + h/2.0;
-    camera.castRay(u,v); //cast a ray through the point
+    var u = (width*x/(canvas.width-1)) - width/2.0;
+    var v = (-heigth*y/(canvas.height-1)) + heigth/2.0;
+    
+    var ray = camera.castRay(u,v); //cast a ray through the point
+    for (var obj in surfaces) surfaces[obj].intersects(ray);
     DEBUG = false;
   });
 

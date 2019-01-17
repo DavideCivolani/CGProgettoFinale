@@ -11,6 +11,7 @@ var Matrix4 = glMatrix.mat4;
 var canvas;
 var context;
 var imageBuffer;
+var aspect;
 var heigth;
 var width;
 
@@ -21,8 +22,8 @@ var EPSILON = 0.00001; //error margins
 var scene;
 var camera;
 var surfaces = [];
+var lights = [];
 // var materials;
-var aspect;
 
 //etc...
 
@@ -103,7 +104,6 @@ class Camera {
 
     return e;
   }
-
 
 
   castRay(x,y) { //calcola il raggio che parte dalla camera e interseca il punto (x,y) nel rettangolo di vista
@@ -191,15 +191,75 @@ class Sphere {
 
   }
   
+  getNormal(point) { //Calcola le normali come n = (point-center)/radius
+    var n = Vector3.create();
+    n = Vector3.subtract([], this.center, point);
+    n = Vector3.scale([], n, 1/this.radius);
+    return n;
+  }
+
+  shade(ray, point, normal) {
+    
+    //TODO: implementa supporto per più di una luce
+    var light = lights[0];
+    
+    var ambient = Vector3.multiply([], this.material.ka, light.color); //componente ambientale ka*la (vale per tutti i tipi di luci?)
+    var color = ambient;
+
+    if (light.source == "Point") { //le luci ambientali non influenzano comp. diffusa e speculare
+      var lightDirection = Vector3.subtract([], light.position, point); //calcola la direzione del raggio di luce (l)
+      lightDirection = Vector3.normalize([],lightDirection);
+      var nDotL = Vector3.dot([], normal, lightDirection);
+      if (nDotL < 0) nDotL = 0; //max (0, nDotL)
+
+      var diffuse = Vector3.multiply([],this.material.kd, light.color);
+      diffuse = Vector3.scale([], diffuse, nDotL); //kd * light.color *nDotL
+      
+      var specular = new Vector3();
+      if (nDotL > 0.0) {
+        //TODO: luce speculare
+
+        //calcola il vettore riflesso r
+
+        //calcola il vettore incidente v
+        var v = Vector3.normalize([],ray.getDirection()); //?
+
+        //calcola la componente speculare
+
+      }
+
+      color = ambient + diffuse + specular;
+    }
+    return color;
+  }
 }
 
 class Triangle {
   constructor(p1, p2, p3, material) {
-    this.p1 = p1;
-    this.p2 = p2;
-    this.p3 = p3;
+    this.a = p1;
+    this.b = p2;
+    this.c = p3;
     this.material = material;
+
+    //Normale
+    var a_b = Vector3.subtract([], p1,p2);
+    var a_c = Vector3.subtract([], p1,p3);
+    this.normal = Vector3.cross([], a_b, a_c);
   }
+
+  intersects(ray) {
+    //Implementa formule per intersezione geometrica (Lezione 24, slide 33)
+    var t;
+    t = Vector3.subtract([], this.a, ray.getOrigin()); //a-e
+    t = Vector3.dot(t, this.normal);
+    t = t / Vector3.dot(ray.getDirection(),this.normal);
+    return t;
+
+    //Test inside edge
+
+  }
+
+  getNormal(point) {return this.normal;}
 
 }
 
@@ -212,11 +272,11 @@ class Ray {
   
   pointAtParameter(t) {
     //return A + t * d
-    var tmp;
+    var tmp = [];
     //tmp = Vector3.add([],a,Vector3.scale([],d,t)); //non si capisce niente così
-    tmp[0] = this.a + t * dir[0];
-    tmp[1] = this.a + t * dir[1];
-    tmp[2] = this.a + t * dir[2];
+    tmp[0] = this.a + t * this.dir[0];
+    tmp[1] = this.a + t * this.dir[1];
+    tmp[2] = this.a + t * this.dir[2];
     return tmp;
   };
   
@@ -234,21 +294,20 @@ class Intersection{
 
 //Lighting
 class Light{
-  constructor() {
-
+  constructor(color) {
+    this.color = color;
   }
 }
 class PointLight extends Light{
-  constructor() {
-    super();
-
+  constructor(color, position) {
+    super(color);
+    this.position = position;
   }
 }
 
 class AmbientLight extends Light {
-  constructor() {
-    super();
-
+  constructor(color) {
+    super(color);
   }
 }
 
@@ -283,18 +342,36 @@ function loadSceneFile(filepath) {
   camera.makeViewMatrix(); //a che serve?
 
   //set up surfaces
+  surfaces = [];
   for (var i = 0; i < scene.surfaces.length; i++) {
+    //trova il materiale associato alla superficie
+    var mat = [];
+    for (var j=0; j < scene.materials.length; j++) 
+      if (scene.materials[j].name == scene.surfaces[i].name) mat = scene.materials[j];
+
+    //crea oggetto corrispondente
     if (scene.surfaces[i].shape == "Sphere") {
-      surfaces.push(new Sphere(scene.surfaces[i].center, scene.surfaces[i].radius, scene.surfaces[i].materials));
+      surfaces.push(new Sphere(scene.surfaces[i].center, scene.surfaces[i].radius, mat));
     }
     if (scene.surfaces[i].shape == "Triangle") {
-      surfaces.push(new Triangle(scene.surfaces[i].p1, scene.surfaces[i].p2, scene.surfaces[i].p3, scene.surfaces[i].material));
+      surfaces.push(new Triangle(scene.surfaces[i].p1, scene.surfaces[i].p2, scene.surfaces[i].p3, mat));
     }
 
   }
 
   //set up lights
-
+  lights = [];
+  for (var i = 0; i < scene.lights.length; i++) {
+    var light = scene.lights[i];
+    if (light.source == "Ambient") {
+      lights.push(new AmbientLight(light.color));
+      //console.log("type: "+light.source+" color: "+light.color);
+    }
+    else if (light.source == "Point")  {
+      lights.push(new PointLight(light.color, light.position));
+      //console.log("type: "+light.source+" color: "+light.color);
+    }
+  }
 
 }
 
@@ -302,28 +379,38 @@ function loadSceneFile(filepath) {
 //renders the scene
 function render() {
   var h,w,u,v,s;
-  var backgroundcolor = [0,0,0];
+  var backgroundcolor = [0,255,0]; //lascia un colore diverso dal nero così si vede se il calcolo della luce sbaglia a calcolare i colori o non funziona proprio
   var start = Date.now(); //for logging
   h = 2*Math.tan(rad(scene.camera.fovy/2.0));
   w = h * aspect;
 
+  var ray, t, color, point, n;
   for (var i = 0; i <= canvas.width;  i++) { //indice bordo sinistro se i=0 (bordo destro se i = nx-1)
     for (var j = 0; j <= canvas.height; j++) {
       u = (w*i/(canvas.width-1)) - w/2.0;
       v = (-h*j/(canvas.height-1)) + h/2.0;
 
-      //TODO - fire a ray though each pixel
+      //fire a ray though each pixel
       var ray = camera.castRay(u, v);
       //if (i < 1 && j< 10) console.log(ray);
 
-      var t = false;
-      for (var k = 0; k < surfaces.length; k++) {
+      t = false; color = backgroundcolor;
+      for (var k = 0; k < surfaces.length; k++) { //for every surface in the scene
         //calculate the intersection of that ray with the scene
-        t = surfaces[k].intersects(ray);
+        t = surfaces[k].intersects(ray); //TODO: intersects(ray,tmin tmax)
         
         //set the pixel to be the color of that intersection (using setPixel() method)
         if (t == false) setPixel(i, j, backgroundcolor);
-        else setPixel(i, j, [255,255,255]);
+        else {
+          //Shading computation
+          point = ray.pointAtParameter(t);
+          n = surfaces[k].getNormal(point);
+          
+          //compute color influenced by lighting
+          color = surfaces[k].shade(ray, point, n);
+          
+          setPixel(i, j, color);
+        }
       }
 
     }

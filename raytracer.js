@@ -1,7 +1,6 @@
 "use strict";
 //prova
 
-var filename = "assets/SphereTest.json";
 var test = 0;
 
 //ALIAS UTILI
@@ -327,6 +326,12 @@ class Triangle {
 
   getNormal(point) {return this.normal;}
 
+  shade(ray, point, normal) {
+    //TEST stampa solo un colore
+    var color = [255,0,0];
+    return color;
+  }
+
 }
 
 //Ray-Intersect
@@ -390,7 +395,8 @@ function init() {
   context = canvas.getContext("2d");
   imageBuffer = context.createImageData(canvas.width, canvas.height); //buffer for pixels
 
-  loadSceneFile(filename);
+  //TEST: Renderizza automaticamente al caricamento
+  loadSceneFile('assets/'+$('#scene_file_input').val()+'.json');
 
   render();
 }

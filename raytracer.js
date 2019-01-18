@@ -2,6 +2,7 @@
 //prova
 
 var test = 0;
+var objpointer = null;
 
 //ALIAS UTILI
 var Vector3 = glMatrix.vec3;
@@ -32,7 +33,7 @@ var lights = [];
 class Camera {
   constructor(eye,up,at) {
     this.eye = Vector3.fromValues(eye[0],eye[1],eye[2]);   // Posizione della camera  (e)
-    this.up = Vector3.fromValues(up[0],up[1],up[2]);     // Inclinazione testa        (t)
+    this.up = Vector3.fromValues(-up[0],-up[1],-up[2]);     // Inclinazione testa        (t)
     this.at = Vector3.fromValues(at[0],at[1],at[2]);     // Direzione dello sguardo   (g) 
 
     //Ricavo il camera frame {u,v,w} dai vettori eye,at,up (lezione 8, slide 19)
@@ -170,7 +171,7 @@ class Sphere {
     var color = Vector3.create();
     // var intensity = 0.001; //attenuazione (atten)
 
-    for (var i=0; i < scene.lights.length; i++) {
+    for (var i = 0; i < scene.lights.length; i++) {
 
       var light = scene.lights[i];
       
@@ -190,7 +191,6 @@ class Sphere {
 
         var nDotL = Vector3.dot(normal, l); //angolo tra normale e raggio di luce!
         nDotL = Math.max(nDotL, 0.0);
-        //if (test < 20) console.log("nDotL: "+nDotL+" normal: "+normal+" l: "+l);
         
         diffuse[0] = this.material.kd[0] * light.color[0] * nDotL;
         diffuse[1] = this.material.kd[1] * light.color[1] * nDotL;
@@ -213,9 +213,6 @@ class Sphere {
 
           if (test < 1) { console.log(this.material.ks); test++; }
           Vector3.add(color, color, specular);
-          // specular = Vector3.multiply([], light.color, this.material.ks);  //color*ks
-          // specular = Vector3.scale([], specular, Math.pow(nDoth,this.material.shininess));
-        // }
         
       }
     }
@@ -353,7 +350,7 @@ class PointLight extends Light{
   }
 
   getDistance(point) {
-    return Vector3.length(Vector3.subtract([],this.position, point));
+    return Vector3.length(Vector3.subtract([],point, this.position));
   }
 }
 
@@ -448,7 +445,7 @@ function loadSceneFile(filepath) {
 //renders the scene
 function render() {
   var h,w,u,v,s;
-  var backgroundcolor = [0,255,0]; //lascia un colore diverso dal nero così si vede se il calcolo della luce sbaglia a calcolare i colori o non funziona proprio
+  var backgroundcolor = [0,0,0]; //lascia un colore diverso dal nero così si vede se il calcolo della luce sbaglia a calcolare i colori o non funziona proprio
   var start = Date.now(); //for logging
   h = 2*Math.tan(rad(scene.camera.fovy/2.0));
   w = h * aspect;

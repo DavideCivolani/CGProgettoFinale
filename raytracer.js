@@ -24,7 +24,7 @@ var scene;
 var camera;
 var surfaces = [];
 var lights = [];
-// var materials;
+// var materials = [];
 
 //etc...
 
@@ -168,52 +168,55 @@ class Sphere {
 
   shade(ray, point, normal) {
     var color = Vector3.create();
-    var intensity = 0.001; //attenuazione (atten)
+    // var intensity = 0.001; //attenuazione (atten)
 
     for (var i=0; i < scene.lights.length; i++) {
-      var light = lights[i];
-    
-      //Componente Ambientale - kA*La
-      var ambient = Vector3.multiply([], this.material.ka, light.color); //ka*la (vale per tutti i tipi di luci?)
-      color[0] += ambient[0];
-      color[1] += ambient[1];
-      color[2] += ambient[2];
+
+      var light = scene.lights[i];
       
-      if (scene.lights[i].source == "Point") { //le luci ambientali non influenzano comp. diffusa e speculare
-        //Componente Diffusa - 
-        var l = light.getDirection(point); //l
+      var ambient = Vector3.create();
+      var diffuse = Vector3.create();
+      var specular = Vector3.create();
+
+      if (light.source == "Ambient") {
+        ambient = Vector3.multiply([], this.material.ka, light.color);
+        Vector3.add(color, color, ambient);
+      }
+      else { //le luci ambientali non influenzano comp. diffusa e speculare (include luci direzionali e puntiformi)
+
+        //Componente Diffusa
+        // var l = light.getDirection(point); //l
+        var l = Vector3.normalize([], Vector3.subtract([], light.position, point)); // le luci direzionali non hanno posizione
+
         var nDotL = Vector3.dot(normal, l); //angolo tra normale e raggio di luce!
         nDotL = Math.max(nDotL, 0.0);
         //if (test < 20) console.log("nDotL: "+nDotL+" normal: "+normal+" l: "+l);
         
-        /* var diffuse = Vector3.multiply(Vector3.create(),this.material.kd, light.color);
-        diffuse = Vector3.scale([], diffuse, nDotL); //kd * light.color *nDotL
-        if (test < 10) console.log("diffusemat: "+this.material); */
-        var diffuse = Vector3.create();
         diffuse[0] = this.material.kd[0] * light.color[0] * nDotL;
         diffuse[1] = this.material.kd[1] * light.color[1] * nDotL;
         diffuse[2] = this.material.kd[2] * light.color[2] * nDotL;
+
+        Vector3.add(color, color, diffuse);
         
         //Componente Speculare
-        var specular = Vector3.create();
-        if (nDotL > 0.0) {
-          var v = Vector3.subtract([], camera.eye, point); //v -> camera direction (view)
-          v = Vector3.normalize([], v);
+        // if (nDotL > 0.0) {
+          var v = Vector3.normalize([], Vector3.subtract([], camera.eye, point));
           var h = Vector3.normalize([], Vector3.add([], v, l) ); //norm( norm(cameraPos - point) + l )
-          var hDotN = Vector3.dot(normal, h);
-          hDotN = Math.max(hDotN, 0.0);
+          var nDoth = Vector3.dot(normal, h);
+          nDoth = Math.max(nDoth, 0.0);
           
           //calcola la componente speculare speculat = color*materiale.ks * (hDotN ^ materiale.specular)
-          specular = Vector3.multiply([], light.color, this.material.ks);  //color*ks
-          specular = Vector3.scale([], specular, Math.pow(hDotN,this.material.specular));
-        }
-        //intensity = 1.0/(0.01 * Math.pow(light.getDistance(),2);
-        color[0] += intensity*(diffuse[0] + specular[0]);
-        color[1] += intensity*(diffuse[1] + specular[1]);
-        color[2] += intensity*(diffuse[2] + specular[2]);
-        if (test < 20) console.log("pixel color: "+color);
+          var grey = [0.8, 0.8, 0.8];
+          specular[0] = light.color[0] * this.material.ks[0] * Math.pow(nDoth, this.material.shininess);
+          specular[1] = light.color[1] * this.material.ks[1] * Math.pow(nDoth, this.material.shininess);
+          specular[2] = light.color[2] * this.material.ks[2] * Math.pow(nDoth, this.material.shininess);
 
-        test++;
+          if (test < 1) { console.log(this.material.ks); test++; }
+          Vector3.add(color, color, specular);
+          // specular = Vector3.multiply([], light.color, this.material.ks);  //color*ks
+          // specular = Vector3.scale([], specular, Math.pow(nDoth,this.material.shininess));
+        // }
+        
       }
     }
     return color;
@@ -236,18 +239,7 @@ class Triangle {
   }
 
   intersects(ray) {
-    /* //Implementa formule per intersezione geometrica (Lezione 24, slide 33)
-    var t;
-    t = Vector3.subtract([], this.a, ray.getOrigin()); //a-e
-    t = Vector3.dot(t, this.normal);
-    t = t / Vector3.dot(ray.getDirection(),this.normal);
-    
-    //TODO: Test inside edge
-    //vettore x = ?
-    
-    return t; */
 
-    //Metodo Matteo
     var A = Matrix3.fromValues(
       this.a[0]-this.b[0], this.a[0]-this.c[0], ray.dir[0],
       this.a[1]-this.b[1], this.a[1]-this.c[1], ray.dir[1],
@@ -259,96 +251,50 @@ class Triangle {
       this.a[1]-ray.a[1],
       this.a[2]-ray.a[2]
     ])
-    // var B = Matrix3.fromValues(
-    //   this.a[0]-ray.a[0],
-    //   this.a[1]-ray.a[1],
-    //   this.a[2]-ray.a[2]
-    // );
-
-    // metodo della inversa
-    // var invA = Matrix3.create();
-    // Matrix3.invert(invA,A);
-
-    // var x = Matrix3.create();
-    // Matrix3.multiply(x, invA, B);
     
     // metodo di cramer come sul libro
-    // var M = A[0]*(A[4]*A[8] - A[5]*A[7]) + A[3]*(A[2]*A[7] - A[1]*A[8]) + A[6]*(A[1]*A[5] - A[4]*A[2]);
-    // var beta = ( B[0]*(A[4]*A[8] - A[5]*A[7]) + B[1]*(A[2]*A[7] - A[2]*A[8]) + B[2]*(A[1]*A[5] - A[4]*A[2]) )/M;
-    // var gamma = ( A[8]*(A[0]*B[1] - B[0]*A[3]) + A[5]*(B[0]*A[6] - A[0]*B[2]) + A[2]*(A[3]*B[2] - B[1]*A[6]) )/M;
-    // var t = ( A[7]*(A[0]*B[1] - B[0]*A[3]) + A[4]*(B[0]*A[6] - A[0]*B[2]) + A[1]*(A[3]*B[2] - B[1]*A[6]) )/M;
+    // A
+    // a = 0    d = 1    g = 2
+    // b = 3    e = 4    h = 5
+    // c = 6    f = 7    i = 8
 
+    // B
+    // j = 0
+    // k = 1
+    // l = 2
 
-    
-    // metodo trovato online
-    var V = new Vector3.create();
-    Vector3.subtract(this.b, this.a, V);
+    var ei_hf = A[4]*A[8] - A[5]*A[7];
+    var gf_di = A[2]*A[7] - A[1]*A[8];
+    var dh_eg = A[1]*A[5] - A[4]*A[2];
 
-    var W = new Vector3.create();
-    Vector3.subtract(this.c, this.a, W);
-    
-    var n = new Vector3.fromValues(V[1]*W[2] - V[2]*W[1],
-                                   V[2]*W[0] - V[0]*W[2],
-                                   V[0]*W[1] - V[1]*W[0]);
-    
-    var N = [];
-    N[0] = n[0] / (Math.abs(n[0]) + Math.abs(n[1]) + Math.abs(n[2]));
-    N[1] = n[1] / (Math.abs(n[0]) + Math.abs(n[1]) + Math.abs(n[2]));
-    N[2] = n[2] / (Math.abs(n[0]) + Math.abs(n[1]) + Math.abs(n[2]));
+    var ak_jb = A[0]*B[1] - B[0]*A[3];
+    var jc_al = B[0]*A[6] - A[0]*B[2];
+    var bl_kc = A[3]*B[2] - B[1]*A[6];
 
-    var D = Vector3.dot(N, this.a);
-    var t = - ( Vector3.dot(N, ray.a) + D ) / Vector3.dot(N, ray.dir);
+    var M = A[0]*( ei_hf ) + A[3]*( gf_di ) + A[6]*( dh_eg ); //
+    var beta = ( B[0]*( ei_hf ) + B[1]*( gf_di ) + B[2]*( dh_eg ) )/M; //
+    var gamma = ( A[8]*( ak_jb ) + A[5]*( jc_al ) + A[2]*( bl_kc ) )/M; //
+    var t = - ( A[7]*( ak_jb ) + A[4]*( jc_al ) + A[1]*( bl_kc ) )/M; //
 
-    var P = new Vector3.create();
-    P[0] = ray.a[0] + t*ray.dir[0];
-    P[1] = ray.a[1] + t*ray.dir[1];
-    P[2] = ray.a[2] + t*ray.dir[2];
-
-    var edge0 = new Vector3.create();
-    Vector3.subtract(this.b, this.a, edge0);
-    var edge1 = new Vector3.create();
-    Vector3.subtract(this.c, this.b, edge1);
-    var edge2 = new Vector3.create();
-    Vector3.subtract(this.a, this.c, edge2);
-
-    var C0 = new Vector3.create();
-    Vector3.subtract(P, this.a, C0);
-    var C1 = new Vector3.create();
-    Vector3.subtract(P, this.b, C1);
-    var C2 = new Vector3.create();
-    Vector3.subtract(P, this.c, C2);
-
-    var cross0 = new Vector3.create();
-    Vector3.cross(edge0, C0, cross0);
-    var cross1 = new Vector3.create();
-    Vector3.cross(edge1, C1, cross1);
-    var cross2 = new Vector3.create();
-    Vector3.cross(edge2, C2, cross2);
-
-
-    if (Vector3.dot(N, cross0) > 0 &&
-        Vector3.dot(N, cross1) > 0 &&
-        Vector3.dot(N, cross2) > 0) return true;
+    // cramer
+    if (beta > 0 && gamma > 0 && beta+gamma < 1) { // intersezione
+      // console.log("ok");
+      return t;
+    }
     else return false;
-
-
-    // if (test < 10) {
-    //   console.log(P);
-    //   test++;
-    // }
-
-    // if (beta > 0 && gamma > 0 && beta+gamma < 1) { // intersezione
-    //   // console.log("ok");
-    //   return t;
-    // }
-    // else return false;
   }
 
   getNormal(point) {return this.normal;}
 
   shade(ray, point, normal) {
-    //TEST stampa solo un colore
-    var color = [255,0,0];
+    
+    var color = [0, 0, 0];
+
+    
+    
+
+
+
     return color;
   }
 
@@ -379,9 +325,9 @@ class Ray {
   
 }
 
-class Intersection{
+// class Intersection{
 
-}
+// }
 
 //Lighting
 class Light{
@@ -409,15 +355,24 @@ class PointLight extends Light{
   getDistance(point) {
     return Vector3.length(Vector3.subtract([],this.position, point));
   }
-  
 }
 
-
-class Material { //Forse è sufficiente usare i file caricati dal json
-  constructor() {
-
+class DirectionalLight extends Light{
+  constructor(color, direction) {
+    super(color);
+    this.direction = direction;
   }
 }
+
+
+// class Material { //Forse è sufficiente usare i file caricati dal json
+//   constructor(ka, kd, ks, shininess) {
+//     this.ka = ka;
+//     this.kd = kd;
+//     this.ks = ks;
+//     this.sininess = shininess;
+//   }
+// }
 
 
 //initializes the canvas and drawing buffers
@@ -443,7 +398,7 @@ function loadSceneFile(filepath) {
   //set up camera
   aspect = scene.camera.aspect;
   camera = new Camera(scene.camera.eye, scene.camera.up, scene.camera.at);
-  camera.makeViewMatrix(); //a che serve?
+  // camera.makeViewMatrix(); //a che serve?
 
   //set up surfaces
   surfaces = [];
@@ -456,9 +411,11 @@ function loadSceneFile(filepath) {
     //crea oggetto corrispondente
     if (scene.surfaces[i].shape == "Sphere") {
       surfaces.push(new Sphere(scene.surfaces[i].center, scene.surfaces[i].radius, mat));
+      // console.log(surfaces[i]);
     }
     if (scene.surfaces[i].shape == "Triangle") {
       surfaces.push(new Triangle(scene.surfaces[i].p1, scene.surfaces[i].p2, scene.surfaces[i].p3, mat));
+      // console.log(surfaces[i]);
     }
 
   }
@@ -475,7 +432,15 @@ function loadSceneFile(filepath) {
       lights.push(new PointLight(light.color, light.position));
       //console.log("type: "+light.source+" color: "+light.color);
     }
+    else if (light.source == "Directional") {
+      lights.push(new DirectionalLight(light.color, light.direction));
+    }
   }
+
+  // materials = [];
+  // for (var i = 0; i < scene.materials.length; i++) {
+  //   materials.push(new Material(scene.materials[i].ka, scene.materials[i].kd, scene.materials[i].ks, scene.materials[i].shininess));
+  // }
 
 }
 

@@ -167,39 +167,59 @@ class Sphere {
   }
 
   shade(ray, point, normal) {
-    
-    //TODO: implementa supporto per più di una luce
-    var light = lights[0];
-    
-    var ambient = Vector3.multiply([], this.material.ka, light.color); //componente ambientale ka*la (vale per tutti i tipi di luci?)
-    var color = ambient;
+    var color = Vector3.create();
+    var intensity = 0.001; //attenuazione (atten)
 
-    if (light.source == "Point") { //le luci ambientali non influenzano comp. diffusa e speculare
-      var lightDirection = Vector3.subtract([], light.position, point); //calcola la direzione del raggio di luce (l)
-      lightDirection = Vector3.normalize([],lightDirection);
-      var nDotL = Vector3.dot([], normal, lightDirection);
-      if (nDotL < 0) nDotL = 0; //max (0, nDotL)
-
-      var diffuse = Vector3.multiply([],this.material.kd, light.color);
-      diffuse = Vector3.scale([], diffuse, nDotL); //kd * light.color *nDotL
+    for (var i=0; i < scene.lights.length; i++) {
+      var light = lights[i];
+    
+      //Componente Ambientale - kA*La
+      var ambient = Vector3.multiply([], this.material.ka, light.color); //ka*la (vale per tutti i tipi di luci?)
+      color[0] += ambient[0];
+      color[1] += ambient[1];
+      color[2] += ambient[2];
       
-      var specular = new Vector3();
-      if (nDotL > 0.0) {
-        //TODO: luce speculare
+      if (scene.lights[i].source == "Point") { //le luci ambientali non influenzano comp. diffusa e speculare
+        //Componente Diffusa - 
+        var l = light.getDirection(point); //l
+        var nDotL = Vector3.dot(normal, l); //angolo tra normale e raggio di luce!
+        nDotL = Math.max(nDotL, 0.0);
+        //if (test < 20) console.log("nDotL: "+nDotL+" normal: "+normal+" l: "+l);
+        
+        /* var diffuse = Vector3.multiply(Vector3.create(),this.material.kd, light.color);
+        diffuse = Vector3.scale([], diffuse, nDotL); //kd * light.color *nDotL
+        if (test < 10) console.log("diffusemat: "+this.material); */
+        var diffuse = Vector3.create();
+        diffuse[0] = this.material.kd[0] * light.color[0] * nDotL;
+        diffuse[1] = this.material.kd[1] * light.color[1] * nDotL;
+        diffuse[2] = this.material.kd[2] * light.color[2] * nDotL;
+        
+        //Componente Speculare
+        var specular = Vector3.create();
+        if (nDotL > 0.0) {
+          var v = Vector3.subtract([], camera.eye, point); //v -> camera direction (view)
+          v = Vector3.normalize([], v);
+          var h = Vector3.normalize([], Vector3.add([], v, l) ); //norm( norm(cameraPos - point) + l )
+          var hDotN = Vector3.dot(normal, h);
+          hDotN = Math.max(hDotN, 0.0);
+          
+          //calcola la componente speculare speculat = color*materiale.ks * (hDotN ^ materiale.specular)
+          specular = Vector3.multiply([], light.color, this.material.ks);  //color*ks
+          specular = Vector3.scale([], specular, Math.pow(hDotN,this.material.specular));
+        }
+        //intensity = 1.0/(0.01 * Math.pow(light.getDistance(),2);
+        color[0] += intensity*(diffuse[0] + specular[0]);
+        color[1] += intensity*(diffuse[1] + specular[1]);
+        color[2] += intensity*(diffuse[2] + specular[2]);
+        if (test < 20) console.log("pixel color: "+color);
 
-        //calcola il vettore riflesso r
-
-        //calcola il vettore incidente v
-        var v = Vector3.normalize([],ray.getDirection()); //?
-
-        //calcola la componente speculare
-
+        test++;
       }
-
-      color = ambient + diffuse + specular;
     }
     return color;
   }
+  
+  
 }
 
 class Triangle {
@@ -341,13 +361,16 @@ class Ray {
     this.dir = dir; //direzione
   }
   
-  pointAtParameter(t) {
+  pointAt(t) {
     //return A + t * d
-    var tmp = [];
-    //tmp = Vector3.add([],a,Vector3.scale([],d,t)); //non si capisce niente così
-    tmp[0] = this.a + t * this.dir[0];
-    tmp[1] = this.a + t * this.dir[1];
-    tmp[2] = this.a + t * this.dir[2];
+    var tmp = Vector3.create();
+    //tmp = Vector3.add([],this.a,Vector3.scale([],this.dir,t)); //non si capisce niente così
+    
+    tmp[0] = this.a[0] + t * this.dir[0];
+    tmp[1] = this.a[1] + t * this.dir[1];
+    tmp[2] = this.a[2] + t * this.dir[2];
+    
+    //if (test < 10) console.log("p(+"+t+"): ["+tmp+"] direzione: "+this.dir);
     return tmp;
   };
   
@@ -357,9 +380,6 @@ class Ray {
 }
 
 class Intersection{
-  constructor(x,y,z) {
-    this.int = new Vector3(x,y,z);
-  }
 
 }
 
@@ -369,18 +389,29 @@ class Light{
     this.color = color;
   }
 }
-class PointLight extends Light{
-  constructor(color, position) {
-    super(color);
-    this.position = position;
-  }
-}
-
 class AmbientLight extends Light {
   constructor(color) {
     super(color);
   }
 }
+
+class PointLight extends Light{
+  constructor(color, position) {
+    super(color);
+    this.position = position;
+  }
+
+  getDirection(point) {
+    var d = Vector3.subtract([], this.position, point);
+    return Vector3.normalize([], d);
+  }
+
+  getDistance(point) {
+    return Vector3.length(Vector3.subtract([],this.position, point));
+  }
+  
+}
+
 
 class Material { //Forse è sufficiente usare i file caricati dal json
   constructor() {
@@ -418,7 +449,7 @@ function loadSceneFile(filepath) {
   surfaces = [];
   for (var i = 0; i < scene.surfaces.length; i++) {
     //trova il materiale associato alla superficie
-    var mat = [];
+    var mat = scene.materials[0];
     for (var j=0; j < scene.materials.length; j++) 
       if (scene.materials[j].name == scene.surfaces[i].name) mat = scene.materials[j];
 
@@ -476,7 +507,7 @@ function render() {
         if (t == false) setPixel(i, j, backgroundcolor);
         else {
           //Shading computation
-          point = ray.pointAtParameter(t);
+          point = ray.pointAt(t);
           n = surfaces[k].getNormal(point);
           
           //compute color influenced by lighting

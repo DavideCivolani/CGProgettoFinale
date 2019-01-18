@@ -2,6 +2,7 @@
 //prova
 
 var test = 0;
+var objpointer = null;
 
 //ALIAS UTILI
 var Vector3 = glMatrix.vec3;
@@ -170,15 +171,17 @@ class Sphere {
     var color = Vector3.create();
     var intensity = 0.001; //attenuazione (atten)
 
-    for (var i=0; i < scene.lights.length; i++) {
+    for (var i=1; i < scene.lights.length; i++) {
       var light = lights[i];
-    
-      //Componente Ambientale - kA*La
-      var ambient = Vector3.multiply([], this.material.ka, light.color); //ka*la (vale per tutti i tipi di luci?)
-      color[0] += ambient[0];
-      color[1] += ambient[1];
-      color[2] += ambient[2];
       
+      if (scene.lights[i].source == "Ambient") {
+        //Componente Ambientale - kA*La
+        var ambient = Vector3.multiply([], this.material.ka, light.color); //ka*la (vale per tutti i tipi di luci?)
+        color[0] += ambient[0];
+        color[1] += ambient[1];
+        color[2] += ambient[2];
+        //if (test < 10) console.log("ambient: "+color);
+      }
       if (scene.lights[i].source == "Point") { //le luci ambientali non influenzano comp. diffusa e speculare
         //Componente Diffusa - 
         var l = light.getDirection(point); //l
@@ -193,30 +196,39 @@ class Sphere {
         diffuse[0] = this.material.kd[0] * light.color[0] * nDotL;
         diffuse[1] = this.material.kd[1] * light.color[1] * nDotL;
         diffuse[2] = this.material.kd[2] * light.color[2] * nDotL;
+        if (test < 20) console.log("diffuse: "+diffuse);
         
         //Componente Speculare
         var specular = Vector3.create();
         if (nDotL > 0.0) {
           var v = Vector3.subtract([], camera.eye, point); //v -> camera direction (view)
+          //var v = Vector3.scale([],ray.pointAt(t),-1);
           v = Vector3.normalize([], v);
+          
           var h = Vector3.normalize([], Vector3.add([], v, l) ); //norm( norm(cameraPos - point) + l )
           var hDotN = Vector3.dot(normal, h);
           hDotN = Math.max(hDotN, 0.0);
+          //if (test < 20) console.log("HdotN: "+hDotN);
           
-          //calcola la componente speculare speculat = color*materiale.ks * (hDotN ^ materiale.specular)
-          specular = Vector3.multiply([], light.color, this.material.ks);  //color*ks
-          specular = Vector3.scale([], specular, Math.pow(hDotN,this.material.specular));
+          //calcola la componente speculare specular = color*materiale.ks * (hDotN ^ materiale.specular)
+          specular = Vector3.multiply([], this.material.ks, light.color);  //ks*color
+          //if (test < 100) console.log(" shininess: "+this.material.shininess);
+          //if (test < 20) console.log("specular: "+specular+" HN^spec: "+Math.pow(hDotN,this.material.shininess));
+          specular = Vector3.scale([], specular, Math.pow(hDotN,this.material.shininess));
+          if (test < 20) console.log("specular: "+specular);
         }
-        //intensity = 1.0/(0.01 * Math.pow(light.getDistance(),2);
+        intensity = 0.001 * light.getDistance(point)*light.getDistance(point);
+        //if (test<20) console.log("intensity: "+intensity);
         color[0] += intensity*(diffuse[0] + specular[0]);
         color[1] += intensity*(diffuse[1] + specular[1]);
         color[2] += intensity*(diffuse[2] + specular[2]);
-        if (test < 20) console.log("pixel color: "+color);
+        if (test < 20) console.log(color);
+
 
         test++;
       }
     }
-    return color;
+    return Vector3.scale([],color,128);
   }
   
   
@@ -407,7 +419,7 @@ class PointLight extends Light{
   }
 
   getDistance(point) {
-    return Vector3.length(Vector3.subtract([],this.position, point));
+    return Vector3.length(Vector3.subtract([],point, this.position));
   }
   
 }

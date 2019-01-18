@@ -33,7 +33,7 @@ var lights = [];
 class Camera {
   constructor(eye,up,at) {
     this.eye = Vector3.fromValues(eye[0],eye[1],eye[2]);   // Posizione della camera  (e)
-    this.up = Vector3.fromValues(up[0],up[1],up[2]);     // Inclinazione testa        (t)
+    this.up = Vector3.fromValues(-up[0],-up[1],-up[2]);     // Inclinazione testa        (t)
     this.at = Vector3.fromValues(at[0],at[1],at[2]);     // Direzione dello sguardo   (g) 
 
     //Ricavo il camera frame {u,v,w} dai vettori eye,at,up (lezione 8, slide 19)
@@ -169,66 +169,62 @@ class Sphere {
 
   shade(ray, point, normal) {
     var color = Vector3.create();
-    var intensity = 0.001; //attenuazione (atten)
+    
+    var v = Vector3.scale([],ray.getDirection(),-1); //v -> camera direction (view)
+    v = Vector3.normalize([], v);
 
-    for (var i=1; i < scene.lights.length; i++) {
+    for (var i=0; i < scene.lights.length; i++) {
       var light = lights[i];
       
       if (scene.lights[i].source == "Ambient") {
         //Componente Ambientale - kA*La
-        var ambient = Vector3.multiply([], this.material.ka, light.color); //ka*la (vale per tutti i tipi di luci?)
-        color[0] += ambient[0];
-        color[1] += ambient[1];
-        color[2] += ambient[2];
+        //var ambient = Vector3.multiply([], this.material.ka, light.color); //ka*la
+        color[0] += this.material.ka[0] * light.color[0];
+        color[1] += this.material.ka[1] * light.color[1];
+        color[2] += this.material.ka[2] * light.color[2];
         //if (test < 10) console.log("ambient: "+color);
       }
       if (scene.lights[i].source == "Point") { //le luci ambientali non influenzano comp. diffusa e speculare
-        //Componente Diffusa - 
-        var l = light.getDirection(point); //l
-        var nDotL = Vector3.dot(normal, l); //angolo tra normale e raggio di luce!
-        nDotL = Math.max(nDotL, 0.0);
-        //if (test < 20) console.log("nDotL: "+nDotL+" normal: "+normal+" l: "+l);
+        //Componente Diffusa - kD*Ld*LdotN
+        var l = light.getDirection(point);
+        l = Vector3.normalize([], l);
+        var LdotN = Vector3.dot(l, normal); //angolo tra normale e raggio di luce!
+        LdotN = Math.max(LdotN, 0.0);
+        //if (test < 20) console.log("LdotN: "+LdotN+" normal: "+normal+" l: "+l);
         
-        /* var diffuse = Vector3.multiply(Vector3.create(),this.material.kd, light.color);
-        diffuse = Vector3.scale([], diffuse, nDotL); //kd * light.color *nDotL
-        if (test < 10) console.log("diffusemat: "+this.material); */
         var diffuse = Vector3.create();
-        diffuse[0] = this.material.kd[0] * light.color[0] * nDotL;
-        diffuse[1] = this.material.kd[1] * light.color[1] * nDotL;
-        diffuse[2] = this.material.kd[2] * light.color[2] * nDotL;
-        if (test < 20) console.log("diffuse: "+diffuse);
+        diffuse[0] = this.material.kd[0] * light.color[0] * LdotN;
+        diffuse[1] = this.material.kd[1] * light.color[1] * LdotN;
+        diffuse[2] = this.material.kd[2] * light.color[2] * LdotN;
+        //if (test < 20) console.log("diffuse: "+diffuse);
         
-        //Componente Speculare
+        //Componente Speculare - kS*Ls*LdotN^shininess
+        //calcola il vettore riflesso r
+        var r = Vector3.create();
+        r[0] = 2*LdotN* normal[0] - l[0];
+        r[1] = 2*LdotN* normal[1] - l[1];
+        r[2] = 2*LdotN* normal[2] - l[2];
+        
+        //calcola intensità lobo di luce
+        var RdotV = Math.max(0, Vector3.dot(r,v));
+        var shine = Math.pow(RdotV, this.material.shininess);
+        
+        //calcola riflesso
         var specular = Vector3.create();
-        if (nDotL > 0.0) {
-          var v = Vector3.subtract([], camera.eye, point); //v -> camera direction (view)
-          //var v = Vector3.scale([],ray.pointAt(t),-1);
-          v = Vector3.normalize([], v);
-          
-          var h = Vector3.normalize([], Vector3.add([], v, l) ); //norm( norm(cameraPos - point) + l )
-          var hDotN = Vector3.dot(normal, h);
-          hDotN = Math.max(hDotN, 0.0);
-          //if (test < 20) console.log("HdotN: "+hDotN);
-          
-          //calcola la componente speculare specular = color*materiale.ks * (hDotN ^ materiale.specular)
-          specular = Vector3.multiply([], this.material.ks, light.color);  //ks*color
-          //if (test < 100) console.log(" shininess: "+this.material.shininess);
-          //if (test < 20) console.log("specular: "+specular+" HN^spec: "+Math.pow(hDotN,this.material.shininess));
-          specular = Vector3.scale([], specular, Math.pow(hDotN,this.material.shininess));
-          if (test < 20) console.log("specular: "+specular);
-        }
-        intensity = 0.001 * light.getDistance(point)*light.getDistance(point);
+        specular = Vector3.multiply([], this.material.ks, light.color);  //ks*color
+        specular = Vector3.scale([], specular, shine);
+        
+        //if (test < 20) console.log("specular: "+specular);
         //if (test<20) console.log("intensity: "+intensity);
-        color[0] += intensity*(diffuse[0] + specular[0]);
-        color[1] += intensity*(diffuse[1] + specular[1]);
-        color[2] += intensity*(diffuse[2] + specular[2]);
-        if (test < 20) console.log(color);
+        color[0] += diffuse[0] + specular[0];
+        color[1] += diffuse[1] + specular[1];
+        color[2] += diffuse[2] + specular[2];
+        //if (test < 20) console.log(color);
 
-
-        test++;
+        //test++;
       }
     }
-    return Vector3.scale([],color,128);
+    return color;
   }
   
   
@@ -495,7 +491,7 @@ function loadSceneFile(filepath) {
 //renders the scene
 function render() {
   var h,w,u,v,s;
-  var backgroundcolor = [0,255,0]; //lascia un colore diverso dal nero così si vede se il calcolo della luce sbaglia a calcolare i colori o non funziona proprio
+  var backgroundcolor = [0,0,0]; //lascia un colore diverso dal nero così si vede se il calcolo della luce sbaglia a calcolare i colori o non funziona proprio
   var start = Date.now(); //for logging
   h = 2*Math.tan(rad(scene.camera.fovy/2.0));
   w = h * aspect;

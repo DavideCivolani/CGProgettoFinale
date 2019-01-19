@@ -6,6 +6,7 @@ var objpointer = null;
 
 //ALIAS UTILI
 var Vector3 = glMatrix.vec3;
+var Vector4 = glMatrix.vec4;
 var Matrix4 = glMatrix.mat4;
 var Matrix3 = glMatrix.mat3;
 
@@ -127,12 +128,32 @@ class Camera {
 }
 
 //Surfaces
-class Surface{
-  constructor(material) {
+class Surface { // così modifichiamo uno shader unico per tutto
+  constructor(material, transforms) {
     this.material = material;
+    this.M = Matrix4.create();
+    for (var i = 0; i < transforms.length; i++) {
+      switch (transforms[i][0]) {
+
+        case "Translate":
+          this.M = Matrix4.multiply([], Matrix4.fromTranslation([], transforms[i][1]), this.M);
+        break;
+
+        case "Rotate":
+          this.M = Matrix4.multiply([], Matrix4.fromXRotation([], rad(transforms[i][1][0])), this.M);
+          this.M = Matrix4.multiply([], Matrix4.fromYRotation([], rad(transforms[i][1][1])), this.M);
+          this.M = Matrix4.multiply([], Matrix4.fromZRotation([], rad(transforms[i][1][2])), this.M);
+        break;
+
+        case "Scale":
+          this.M = Matrix4.multiply([], Matrix4.fromScaling([], transforms[i][1]), this.M);
+        break;
+      }
+    }
   }
 
-  shade(ray, point, normal) {
+  shade(ray, point, n) {
+
     var color = Vector3.create();
     //var v = Vector3.scale([],ray.getDirection(),-1); //v -> camera direction (view)
     var v = Vector3.normalize([], Vector3.subtract([], camera.eye, point)); //uguale a sopra perchè il raggio è emesso dalla camera!
@@ -152,61 +173,53 @@ class Surface{
       else { //le luci ambientali non influenzano comp. diffusa e speculare (include luci direzionali e puntiformi)
         
         //Componente Diffusa
-        var l = Vector3.scale([],light.getDirection(point), -1); //prende la direzione giusta a seconda del tipo di luce
+        // l = norm( posizione luce - punto intersezione )
+        var l = Vector3.create();
+        if (light.source == "Point")
+          l = Vector3.normalize([], Vector3.subtract([], light.position, point)); // le luci direzionali non hanno posizione
+        else if (light.source == "Directional") {
+          l[0] = -light.direction[0];
+          l[1] = -light.direction[1];
+          l[2] = -light.direction[2];
+          l = Vector3.normalize([], l);
+        }
+      
+        // if (test < 1 && light.source == "Directional") {console.log(light.direction); test++;}
 
-        var nDotL = Vector3.dot(normal, l); //coseno dell'angolo tra normale e raggio di luce!
+        var nDotL = Vector3.dot(n, l); //angolo tra normale e raggio di luce!
         nDotL = Math.max(nDotL, 0.0);
         
         diffuse[0] = this.material.kd[0] * light.color[0] * nDotL;
         diffuse[1] = this.material.kd[1] * light.color[1] * nDotL;
         diffuse[2] = this.material.kd[2] * light.color[2] * nDotL;
-
         Vector3.add(color, color, diffuse);
-       
-        //Componente Speculare (metodo Phong per Ray-Tracing, Lezione 24, slide 34)
-        //calcola il vettore riflesso r
-        var r = Vector3.create();
-        r[0] = 2*nDotL* normal[0] - l[0];
-        r[1] = 2*nDotL* normal[1] - l[1];
-        r[2] = 2*nDotL* normal[2] - l[2];
-        
-        //calcola intensità lobo di luce
-        var RdotV = Math.max(0.0, Vector3.dot(r,v));
-        var shine = Math.pow(RdotV, this.material.shininess);
-        
-        //calcola riflesso
-        specular[0] = light.color[0] * this.material.ks[0] * shine;
-        specular[1] = light.color[1] * this.material.ks[1] * shine;
-        specular[2] = light.color[2] * this.material.ks[2] * shine;
-       
-        
-        /* //Componente Speculare classica
-        //var v = Vector3.normalize([], Vector3.subtract([], camera.eye, point));
-        var h = Vector3.normalize([], Vector3.add([], v, l) ); //norm( norm(cameraPos - point) + l )
-        var nDoth = Vector3.dot(normal, h);
-        nDoth = Math.max(nDoth, 0.0);
-        if (test < 20) console.log("nDoth: "+nDoth);
-          
-        //calcola la componente speculare = color*materiale.ks * (hDotN ^ materiale.specular)
-        specular[0] = light.color[0] * this.material.ks[0] * Math.pow(nDoth, this.material.shininess);
-        specular[1] = light.color[1] * this.material.ks[1] * Math.pow(nDoth, this.material.shininess);
-        specular[2] = light.color[2] * this.material.ks[2] * Math.pow(nDoth, this.material.shininess);
-         */
-        //if (test < 20) console.log("specular: "+specular);
-        //if (test<20) console.log("intensity: "+intensity);
+        // if (test < 100) {console.log(color); test++;}
 
-        //if (test < 1) { console.log(this.material.ks); test++; }
-        Vector3.add(color, color, specular);
-        test++;
+        //Componente Speculare
+        // if (nDotL > 0) {
+          var v = Vector3.normalize([], Vector3.subtract([], camera.eye, point)); // norm(cameraPos - point)
+          var h = Vector3.normalize([], Vector3.add([], v, l) ); //norm( v + l )
+          var nDoth = Vector3.dot(n, h);
+          nDoth = Math.max(nDoth, 0.0);
+          
+          //calcola la componente speculare specular = color * materiale.ks * (nDoth ^ materiale.shininess)
+          specular[0] = light.color[0] * this.material.ks[0] * Math.pow(nDoth, this.material.shininess);
+          specular[1] = light.color[1] * this.material.ks[1] * Math.pow(nDoth, this.material.shininess);
+          specular[2] = light.color[2] * this.material.ks[2] * Math.pow(nDoth, this.material.shininess);
+          // if (test < 10) { console.log(light.color, "*", this.material.ks, "*(", nDoth, "^", this.material.shininess, " = ", specular); test++; }
+          
+          Vector3.add(color, color, specular);
+        // }
       }
     }
     return color;
   }
 }
 
-class Sphere extends Surface{
-  constructor(center, radius, material) {
-    super(material);
+class Sphere extends Surface {
+  constructor(center, radius, material, transforms) {
+    super(material, transforms);
+    // super(transforms);
     this.center = center;
     this.radius = radius;
     //this.material = material;
@@ -214,28 +227,30 @@ class Sphere extends Surface{
 
   intersects(ray) {
     
-    /* //Metodo analitico
-    var L,a,b,c, t1,t2;
-    L = Vector3.subtract([], ray.getOrigin(), this.center);
-    a = Vector3.dot(ray.getDirection(), ray.getDirection());
-    b = 2*Vector3.dot(ray.getDirection(), L);
-    c = Vector3.dot(L,L) - this.radius*this.radius;
-
-    var delta = b*b-4*a*c;
-    if (delta >= 0) {
-      t1 = (-b - Math.sqrt(delta))/(2*a);
-      t2 = (-b + Math.sqrt(delta))/(2*a);
-      if (t1 > 0) return t1;
-      if (t2 > 0) return t2; //la camera è dentro la sfera!
-      else return false //sfera dietro alla camera: non la disegno
-    }
-    else return false; //raggio non interseca */
-
+    var M_inv = Matrix4.invert([], this.M);
+    var temp = Matrix4.fromValues(
+      ray.a[0], 0, 0, 0,
+      ray.a[1], 0, 0, 0,
+      ray.a[2], 0, 0, 0,
+      0, 0, 0, 0
+    );
+    temp = Matrix4.multiply([], M_inv, temp);
+    var ray_e = Vector3.fromValues(temp[0], temp[1], temp[2]);
     
+    temp = Matrix4.fromValues(
+      ray.dir[0], 0, 0, 0,
+      ray.dir[1], 0, 0, 0,
+      ray.dir[2], 0, 0, 0,
+      1, 0, 0, 0
+    )
+    temp = Matrix4.multiply([], M_inv, temp);
+    var ray_d = Vector3.fromValues(temp[0], temp[1], temp[2]);
+
+    if (test < 1) {console.log(ray_e, ray_d); test++;}
 
     //Implementa formula sulle slide del prof
-    var p = Vector3.subtract([], ray.getOrigin(), this.center); //e - c
-    var d = ray.getDirection();
+    var p = Vector3.subtract([], ray_e, this.center); //e - c
+    var d = ray_d;
     //console.log("p: "+p+"; d: "+d);
     
     var ddotp = Vector3.dot(d,p);
@@ -250,13 +265,11 @@ class Sphere extends Surface{
 
     
     if (delta >= 0) {
-      var t1 = (-ddotp - Math.sqrt(delta)) / dsquare;
-      var t2 = (-ddotp + Math.sqrt(delta)) / dsquare;
-      
+      var t1 = (-ddotp + Math.sqrt(delta)) / dsquare;
+      var t2 = (-ddotp - Math.sqrt(delta)) / dsquare; // più vicino
+      // if (test < 2) {console.log(t1, t2); test++;}
       //Quale dei due usiamo??
-      if (t1 > 0) return t1;
-      if (t2 > 0) return t2; //la camera è dentro la sfera!
-      else return false //sfera dietro alla camera: non la disegno
+      return t2;
     } 
     else return false;
 
@@ -265,15 +278,16 @@ class Sphere extends Surface{
   getNormal(point) {
     var n = Vector3.create();
     n = Vector3.subtract([], point, this.center);
-    n = Vector3.scale([], n, 1/this.radius);
+    n = Vector3.normalize([], n);
     return n;
   }
   
 }
 
 class Triangle extends Surface {
-  constructor(p1, p2, p3, material) {
-    super(material);
+  constructor(p1, p2, p3, material, transforms) {
+    super(material, transforms);
+    // super(transforms);
     this.a = p1; // a
     this.b = p2; // b
     this.c = p3; // c
@@ -444,15 +458,25 @@ function loadSceneFile(filepath) {
     for (var j=0; j < scene.materials.length; j++) 
       if (scene.materials[j].name == scene.surfaces[i].name) mat = scene.materials[j];
 
+    var transforms = [];
+    // console.log(scene.surfaces[i].transforms.length);
+    if ( scene.surfaces[i].hasOwnProperty('transforms') ) {
+      for (var j = 0; j < scene.surfaces[i].transforms.length; j++) {
+        transforms.push(scene.surfaces[i].transforms[j]);
+      }
+    }
+    
     //crea oggetto corrispondente
     if (scene.surfaces[i].shape == "Sphere") {
-      surfaces.push(new Sphere(scene.surfaces[i].center, scene.surfaces[i].radius, mat));
+      surfaces.push(new Sphere(scene.surfaces[i].center, scene.surfaces[i].radius, mat, transforms));
       // console.log(surfaces[i]);
     }
     if (scene.surfaces[i].shape == "Triangle") {
-      surfaces.push(new Triangle(scene.surfaces[i].p1, scene.surfaces[i].p2, scene.surfaces[i].p3, mat));
+      surfaces.push(new Triangle(scene.surfaces[i].p1, scene.surfaces[i].p2, scene.surfaces[i].p3, mat, transforms));
       // console.log(surfaces[i]);
     }
+
+    // console.log(surfaces[i]);
 
   }
 
@@ -504,26 +528,31 @@ function render() {
 
       //Trova l'oggetto più vicino alla camera
       t = false; color = backgroundcolor;
+      var t_min = false;
+      var k_min = 0;
       for (var k = 0; k < surfaces.length; k++) { //for every surface in the scene
         //calculate the intersection of that ray with the scene
-        t = surfaces[k].intersects(ray);
-        if (t > EPSILON && t < tprev) {
-          tprev = t;
-          surface = surfaces[k];   
+        t = surfaces[k].intersects(ray); //TODO: intersects(ray,tmin tmax)
+        if (t != false && (t_min == false || t <= t_min)) {
+          t_min = t;
+          k_min = k;
         }
       }
-
-      //Shading computation
-      if (t == false) setPixel(i, j, backgroundcolor);
-      else {
-        point = ray.pointAt(t); // corretto
-        n = surface.getNormal(point);
+        
+        //set the pixel to be the color of that intersection (using setPixel() method)
+        if (t_min == false) setPixel(i, j, backgroundcolor);
+        else {
+          //Shading computation
+          point = ray.pointAt(t_min); // corretto
           
-        //compute color influenced by lighting
-        color = surface.shade(ray, point, n);
+          n = surfaces[k_min].getNormal(point);
           
-        setPixel(i, j, color);
-      }
+          //compute color influenced by lighting
+          color = surfaces[k_min].shade(ray, point, n);
+          
+          setPixel(i, j, color);
+          // if (test < 10) { console.log( k_min ); test++; setPixel(i, j, [0, 255, 0]); }
+        }
 
     }
   }

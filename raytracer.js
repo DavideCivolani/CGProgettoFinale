@@ -19,6 +19,7 @@ var width;
 
 var DEBUG = false; //whether to show debug messages
 var EPSILON = 0.00001; //error margins
+var INFINITY = 999999999; //
 
 //scene to render
 var scene;
@@ -163,7 +164,7 @@ class Surface{
         Vector3.add(color, color, diffuse);
        
         //Componente Speculare (metodo Phong per Ray-Tracing, Lezione 24, slide 34)
-       //calcola il vettore riflesso r
+        //calcola il vettore riflesso r
         var r = Vector3.create();
         r[0] = 2*nDotL* normal[0] - l[0];
         r[1] = 2*nDotL* normal[1] - l[1];
@@ -178,8 +179,8 @@ class Surface{
         specular[1] = light.color[1] * this.material.ks[1] * shine;
         specular[2] = light.color[2] * this.material.ks[2] * shine;
        
-        /* 
-        //Componente Speculare classica
+        
+        /* //Componente Speculare classica
         //var v = Vector3.normalize([], Vector3.subtract([], camera.eye, point));
         var h = Vector3.normalize([], Vector3.add([], v, l) ); //norm( norm(cameraPos - point) + l )
         var nDoth = Vector3.dot(normal, h);
@@ -189,12 +190,12 @@ class Surface{
         //calcola la componente speculare = color*materiale.ks * (hDotN ^ materiale.specular)
         specular[0] = light.color[0] * this.material.ks[0] * Math.pow(nDoth, this.material.shininess);
         specular[1] = light.color[1] * this.material.ks[1] * Math.pow(nDoth, this.material.shininess);
-        specular[2] = light.color[2] * this.material.ks[2] * Math.pow(nDoth, this.material.shininess); */
-        
+        specular[2] = light.color[2] * this.material.ks[2] * Math.pow(nDoth, this.material.shininess);
+         */
         //if (test < 20) console.log("specular: "+specular);
         //if (test<20) console.log("intensity: "+intensity);
 
-      //if (test < 1) { console.log(this.material.ks); test++; }
+        //if (test < 1) { console.log(this.material.ks); test++; }
         Vector3.add(color, color, specular);
         test++;
       }
@@ -491,6 +492,8 @@ function render() {
   var ray, t, color, point, n;
   for (var j = 0; j <= canvas.height; j++) { //indice bordo sinistro se i=0 (bordo destro se i = nx-1)
     for (var i = 0; i <= canvas.width;  i++) {
+      var tprev = INFINITY;
+      var surface = null;
 
       u = (w*i/(canvas.width-1)) - w/2.0;
       v = (-h*j/(canvas.height-1)) + h/2.0;
@@ -499,24 +502,27 @@ function render() {
       var ray = camera.castRay(u, v);
       //if (i < 1 && j< 10) console.log(ray);
 
+      //Trova l'oggetto più vicino alla camera
       t = false; color = backgroundcolor;
       for (var k = 0; k < surfaces.length; k++) { //for every surface in the scene
         //calculate the intersection of that ray with the scene
-        t = surfaces[k].intersects(ray); //TODO: intersects(ray,tmin tmax)
-        
-        //set the pixel to be the color of that intersection (using setPixel() method)
-        if (t == false) setPixel(i, j, backgroundcolor);
-        else {
-          //Shading computation
-          point = ray.pointAt(t); // corretto
-          
-          n = surfaces[k].getNormal(point);
-          
-          //compute color influenced by lighting
-          color = surfaces[k].shade(ray, point, n);
-          
-          setPixel(i, j, color);
+        t = surfaces[k].intersects(ray);
+        if (t > EPSILON && t < tprev) {
+          tprev = t;
+          surface = surfaces[k];   
         }
+      }
+
+      //Shading computation
+      if (t == false) setPixel(i, j, backgroundcolor);
+      else {
+        point = ray.pointAt(t); // corretto
+        n = surface.getNormal(point);
+          
+        //compute color influenced by lighting
+        color = surface.shade(ray, point, n);
+          
+        setPixel(i, j, color);
       }
 
     }

@@ -261,29 +261,27 @@ class Sphere extends Surface{
 
   }
   
-  getNormal(point) { //Calcola le normali come n = (point-center)/radius
+  getNormal(point) { //Calcola le normali come n = (center - point)/radius
     var n = Vector3.create();
-    n = Vector3.subtract([], point, this.center);
-    //n = Vector3.scale([], n, 1/this.radius);
-    Vector3.normalize(n,n);
+    n = Vector3.subtract([], this.center, point);
+    n = Vector3.scale([], n, 1/this.radius);
     return n;
   }
-
+  
 }
 
-class Triangle extends Surface{
+class Triangle extends Surface {
   constructor(p1, p2, p3, material) {
     super(material);
     this.a = p1; // a
     this.b = p2; // b
     this.c = p3; // c
-    //this.material = material;
 
     //Normale
-    var a_b = Vector3.subtract([], p1,p2);
+    var a_b = Vector3.subtract([], p2,p1);
     var a_c = Vector3.subtract([], p1,p3);
-    this.normal = Vector3.cross([], a_b, a_c);
-    Vector3.normalize(this.normal, this.normal);
+    this.normal = Vector3.normalize([], Vector3.cross([], a_b, a_c));
+    // if (test < 1) { console.log(this.normal); test++; }
   }
 
   intersects(ray) {
@@ -484,15 +482,16 @@ function loadSceneFile(filepath) {
 
 //renders the scene
 function render() {
-  var h,w,u,v,s;
+  var h,w,u,v;
   var backgroundcolor = [0,0,0]; //lascia un colore diverso dal nero così si vede se il calcolo della luce sbaglia a calcolare i colori o non funziona proprio
   var start = Date.now(); //for logging
   h = 2*Math.tan(rad(scene.camera.fovy/2.0));
   w = h * aspect;
 
   var ray, t, color, point, n;
-  for (var i = 0; i <= canvas.width;  i++) { //indice bordo sinistro se i=0 (bordo destro se i = nx-1)
-    for (var j = 0; j <= canvas.height; j++) {
+  for (var j = 0; j <= canvas.height; j++) { //indice bordo sinistro se i=0 (bordo destro se i = nx-1)
+    for (var i = 0; i <= canvas.width;  i++) {
+
       u = (w*i/(canvas.width-1)) - w/2.0;
       v = (-h*j/(canvas.height-1)) + h/2.0;
 
@@ -509,13 +508,15 @@ function render() {
         if (t == false) setPixel(i, j, backgroundcolor);
         else {
           //Shading computation
-          point = ray.pointAt(t);
+          point = ray.pointAt(t); // corretto
+          
           n = surfaces[k].getNormal(point);
           
           //compute color influenced by lighting
           color = surfaces[k].shade(ray, point, n);
           
           setPixel(i, j, color);
+          if (test < 50) { console.log(n); test++; setPixel(i, j, [0, 255, 0]); }
         }
       }
 
@@ -551,11 +552,10 @@ function rad(degrees){
   return degrees*Math.PI/180;
 }
 
-
 //on load, run the application
 $(document).ready(function(){
   init();
-  
+
   //load and render new scene
   $('#load_scene_button').click(function(){
     var filepath = 'assets/'+$('#scene_file_input').val()+'.json';
@@ -565,16 +565,16 @@ $(document).ready(function(){
   });
 
   //debugging - cast a ray through the clicked pixel with DEBUG messaging on
-  $('#canvas').click(function(e){
-    var x = e.pageX - $('#canvas').offset().left;
-    var y = e.pageY - $('#canvas').offset().top;
-    DEBUG = true;
-    var u = (width*x/(canvas.width-1)) - width/2.0;
-    var v = (-heigth*y/(canvas.height-1)) + heigth/2.0;
+  // $('#canvas').click(function(e){
+  //   var x = e.pageX - $('#canvas').offset().left;
+  //   var y = e.pageY - $('#canvas').offset().top;
+  //   DEBUG = true;
+  //   var u = (width*x/(canvas.width-1)) - width/2.0;
+  //   var v = (-heigth*y/(canvas.height-1)) + heigth/2.0;
     
-    var ray = camera.castRay(u,v); //cast a ray through the point
-    for (var obj in surfaces) surfaces[obj].intersects(ray);
-    DEBUG = false;
-  });
+  //   var ray = camera.castRay(u,v); //cast a ray through the point
+  //   for (var obj in surfaces) surfaces[obj].intersects(ray);
+  //   DEBUG = false;
+  // });
 
 });

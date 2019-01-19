@@ -41,6 +41,8 @@ class Camera {
     // Il camera frame è necessario per usare le formule nel calcolo delle intersezioni
     // this.w = Vector3.normalize([], Vector3.scale([], this.at, -1)); // - normalize(at);
     this.w = Vector3.scale([], Vector3.normalize([], this.at), -1);
+    //var dir = Vector3.subtract([], eye, at);
+    //this.w = Vector3.scale([], Vector3.normalize([], dir), -1);
     this.u = Vector3.normalize([], Vector3.cross([], this.up, this.w)); //normalize(up * w)
     this.v = Vector3.cross([], this.w, this.u); //w * u;
 
@@ -152,22 +154,23 @@ class Surface { // così modifichiamo uno shader unico per tutto
   shade(ray, point, n) {
 
     var color = Vector3.create();
-    // var intensity = 0.001; //attenuazione (atten)
+    //var v = Vector3.scale([],ray.getDirection(),-1); //v -> camera direction (view)
+    var v = Vector3.normalize([], Vector3.subtract([], camera.eye, point)); //uguale a sopra perchè il raggio è emesso dalla camera!
+    v = Vector3.normalize([], v);
 
     for (var i = 0; i < scene.lights.length; i++) {
-
-      var light = scene.lights[i];
+      var light = lights[i];
       
       var ambient = Vector3.create();
       var diffuse = Vector3.create();
       var specular = Vector3.create();
 
-      if (light.source == "Ambient") {
+      if (scene.lights[i].source == "Ambient") {
         ambient = Vector3.multiply([], this.material.ka, light.color);
         Vector3.add(color, color, ambient);
       }
       else { //le luci ambientali non influenzano comp. diffusa e speculare (include luci direzionali e puntiformi)
-
+        
         //Componente Diffusa
         // l = norm( posizione luce - punto intersezione )
         var l = Vector3.create();
@@ -184,7 +187,7 @@ class Surface { // così modifichiamo uno shader unico per tutto
 
         var nDotL = Vector3.dot(n, l); //angolo tra normale e raggio di luce!
         nDotL = Math.max(nDotL, 0.0);
-
+        
         diffuse[0] = this.material.kd[0] * light.color[0] * nDotL;
         diffuse[1] = this.material.kd[1] * light.color[1] * nDotL;
         diffuse[2] = this.material.kd[2] * light.color[2] * nDotL;
@@ -218,6 +221,7 @@ class Sphere extends Surface {
     // super(transforms);
     this.center = center;
     this.radius = radius;
+    //this.material = material;
   }
 
   intersects(ray) {
@@ -270,7 +274,7 @@ class Sphere extends Surface {
 
   }
   
-  getNormal(point) { //Calcola le normali come n = (center - point)/radius
+  getNormal(point) {
     var n = Vector3.create();
     n = Vector3.subtract([], point, this.center);
     n = Vector3.normalize([], n);
@@ -288,9 +292,9 @@ class Triangle extends Surface {
     this.c = p3; // c
 
     //Normale
-    var a_b = Vector3.subtract([], p2,p1);
+    var a_b = Vector3.subtract([], p1,p2);
     var a_c = Vector3.subtract([], p1,p3);
-    this.normal = Vector3.normalize([], Vector3.cross([], a_b, a_c));
+    this.normal = Vector3.normalize([], Vector3.cross([], a_c, a_b));
     // if (test < 1) { console.log(this.normal); test++; }
   }
 
@@ -334,7 +338,7 @@ class Triangle extends Surface {
 
     // cramer
     if (beta > 0 && gamma > 0 && beta+gamma < 1) { // intersezione
-      // console.log("ok");
+      //console.log("ok:"+t);
       return t;
     }
     else return false;
@@ -365,7 +369,7 @@ class Ray {
   };
   
   getOrigin() {return this.a;}
-  getDirection() {return this.dir;}
+  getDirection() {return Vector3.normalize([],this.dir);}
   
 }
 
@@ -392,12 +396,8 @@ class PointLight extends Light{
   }
 
   getDirection(point) {
-    var d = Vector3.subtract([], this.position, point);
+    var d = Vector3.subtract([], point, this.position);
     return Vector3.normalize([], d);
-  }
-
-  getDistance(point) {
-    return Vector3.length(Vector3.subtract([],point, this.position));
   }
 }
 
@@ -405,6 +405,11 @@ class DirectionalLight extends Light{
   constructor(color, direction) {
     super(color);
     this.direction = direction;
+  }
+
+  getDirection(point) {
+    var d = Vector3.scale([],this.direction,1);
+    return Vector3.normalize([],d);
   }
 }
 
@@ -414,7 +419,7 @@ class DirectionalLight extends Light{
 //     this.ka = ka;
 //     this.kd = kd;
 //     this.ks = ks;
-//     this.sininess = shininess;
+//     this.shininess = shininess;
 //   }
 // }
 

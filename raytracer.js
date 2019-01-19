@@ -161,9 +161,9 @@ class Surface{
         diffuse[2] = this.material.kd[2] * light.color[2] * nDotL;
 
         Vector3.add(color, color, diffuse);
-        
-        //Componente Speculare (metodo Phong per Ray-Tracing, Lezione 24, slide 34)
-        //calcola il vettore riflesso r
+       
+        /*//Componente Speculare (metodo Phong per Ray-Tracing, Lezione 24, slide 34)
+       //calcola il vettore riflesso r
         var r = Vector3.create();
         r[0] = 2*nDotL* normal[0] - l[0];
         r[1] = 2*nDotL* normal[1] - l[1];
@@ -177,13 +177,26 @@ class Surface{
         specular[0] = light.color[0] * this.material.ks[0] * shine;
         specular[1] = light.color[1] * this.material.ks[1] * shine;
         specular[2] = light.color[2] * this.material.ks[2] * shine;
+        */
+        
+        //Componente Speculare classica
+        //var v = Vector3.normalize([], Vector3.subtract([], camera.eye, point));
+        var h = Vector3.normalize([], Vector3.add([], v, l) ); //norm( norm(cameraPos - point) + l )
+        var nDoth = Vector3.dot(normal, h);
+        nDoth = Math.max(nDoth, 0.0);
+        if (test < 20) console.log("nDoth: "+nDoth);
+          
+        //calcola la componente speculare = color*materiale.ks * (hDotN ^ materiale.specular)
+        specular[0] = light.color[0] * this.material.ks[0] * Math.pow(nDoth, this.material.shininess);
+        specular[1] = light.color[1] * this.material.ks[1] * Math.pow(nDoth, this.material.shininess);
+        specular[2] = light.color[2] * this.material.ks[2] * Math.pow(nDoth, this.material.shininess);
         
         //if (test < 20) console.log("specular: "+specular);
         //if (test<20) console.log("intensity: "+intensity);
 
       //if (test < 1) { console.log(this.material.ks); test++; }
         Vector3.add(color, color, specular);
-        
+        test++;
       }
     }
     return color;
@@ -250,8 +263,9 @@ class Sphere extends Surface{
   
   getNormal(point) { //Calcola le normali come n = (point-center)/radius
     var n = Vector3.create();
-    n = Vector3.subtract([], this.center, point);
-    n = Vector3.scale([], n, 1/this.radius);
+    n = Vector3.subtract([], point, this.center);
+    //n = Vector3.scale([], n, 1/this.radius);
+    Vector3.normalize(n,n);
     return n;
   }
 
@@ -269,6 +283,7 @@ class Triangle extends Surface{
     var a_b = Vector3.subtract([], p1,p2);
     var a_c = Vector3.subtract([], p1,p3);
     this.normal = Vector3.cross([], a_b, a_c);
+    Vector3.normalize(this.normal, this.normal);
   }
 
   intersects(ray) {

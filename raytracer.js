@@ -133,8 +133,9 @@ class Surface{
 
   shade(ray, point, normal) {
     var color = Vector3.create();
-    var v = Vector3.scale([],ray.getDirection(),-1); //v -> camera direction (view)
-    v = Vector3.normalize([], v); //calcolo qui v per non ricalcolarlo a ogni iterazione (non dipende dalle luci)
+    //var v = Vector3.scale([],ray.getDirection(),-1); //v -> camera direction (view)
+    var v = Vector3.normalize([], Vector3.subtract([], camera.eye, point)); //uguale a sopra perchè il raggio è emesso dalla camera!
+    v = Vector3.normalize([], v);
 
     for (var i = 0; i < scene.lights.length; i++) {
       var light = lights[i];
@@ -150,8 +151,7 @@ class Surface{
       else { //le luci ambientali non influenzano comp. diffusa e speculare (include luci direzionali e puntiformi)
         
         //Componente Diffusa
-        var l = light.getDirection(point); //prende la direzione giusta a seconda del tipo di luce
-        //var l = Vector3.normalize([], Vector3.subtract([], light.position, point)); // le luci direzionali non hanno posizione
+        var l = Vector3.scale([],light.getDirection(point), -1); //prende la direzione giusta a seconda del tipo di luce
 
         var nDotL = Vector3.dot(normal, l); //coseno dell'angolo tra normale e raggio di luce!
         nDotL = Math.max(nDotL, 0.0);
@@ -162,7 +162,7 @@ class Surface{
 
         Vector3.add(color, color, diffuse);
        
-        /*//Componente Speculare (metodo Phong per Ray-Tracing, Lezione 24, slide 34)
+        //Componente Speculare (metodo Phong per Ray-Tracing, Lezione 24, slide 34)
        //calcola il vettore riflesso r
         var r = Vector3.create();
         r[0] = 2*nDotL* normal[0] - l[0];
@@ -177,8 +177,8 @@ class Surface{
         specular[0] = light.color[0] * this.material.ks[0] * shine;
         specular[1] = light.color[1] * this.material.ks[1] * shine;
         specular[2] = light.color[2] * this.material.ks[2] * shine;
-        */
-        
+       
+        /* 
         //Componente Speculare classica
         //var v = Vector3.normalize([], Vector3.subtract([], camera.eye, point));
         var h = Vector3.normalize([], Vector3.add([], v, l) ); //norm( norm(cameraPos - point) + l )
@@ -189,7 +189,7 @@ class Surface{
         //calcola la componente speculare = color*materiale.ks * (hDotN ^ materiale.specular)
         specular[0] = light.color[0] * this.material.ks[0] * Math.pow(nDoth, this.material.shininess);
         specular[1] = light.color[1] * this.material.ks[1] * Math.pow(nDoth, this.material.shininess);
-        specular[2] = light.color[2] * this.material.ks[2] * Math.pow(nDoth, this.material.shininess);
+        specular[2] = light.color[2] * this.material.ks[2] * Math.pow(nDoth, this.material.shininess); */
         
         //if (test < 20) console.log("specular: "+specular);
         //if (test<20) console.log("intensity: "+intensity);
@@ -213,7 +213,7 @@ class Sphere extends Surface{
 
   intersects(ray) {
     
-    //Metodo analitico
+    /* //Metodo analitico
     var L,a,b,c, t1,t2;
     L = Vector3.subtract([], ray.getOrigin(), this.center);
     a = Vector3.dot(ray.getDirection(), ray.getDirection());
@@ -222,15 +222,15 @@ class Sphere extends Surface{
 
     var delta = b*b-4*a*c;
     if (delta >= 0) {
-      t1 = (-b - Math.sqrt(delta))/2*a;
-      t2 = (-b + Math.sqrt(delta))/2*a;
+      t1 = (-b - Math.sqrt(delta))/(2*a);
+      t2 = (-b + Math.sqrt(delta))/(2*a);
       if (t1 > 0) return t1;
       if (t2 > 0) return t2; //la camera è dentro la sfera!
       else return false //sfera dietro alla camera: non la disegno
     }
-    else return false; //raggio non interseca
+    else return false; //raggio non interseca */
 
-
+    
 
     //Implementa formula sulle slide del prof
     var p = Vector3.subtract([], ray.getOrigin(), this.center); //e - c
@@ -249,8 +249,8 @@ class Sphere extends Surface{
 
     
     if (delta >= 0) {
-      var t1 = (-ddotp + Math.sqrt(delta)) / dsquare;
-      var t2 = (-ddotp - Math.sqrt(delta)) / dsquare;
+      var t1 = (-ddotp - Math.sqrt(delta)) / dsquare;
+      var t2 = (-ddotp + Math.sqrt(delta)) / dsquare;
       
       //Quale dei due usiamo??
       if (t1 > 0) return t1;
@@ -261,9 +261,9 @@ class Sphere extends Surface{
 
   }
   
-  getNormal(point) { //Calcola le normali come n = (center - point)/radius
+  getNormal(point) {
     var n = Vector3.create();
-    n = Vector3.subtract([], this.center, point);
+    n = Vector3.subtract([], point, this.center);
     n = Vector3.scale([], n, 1/this.radius);
     return n;
   }
@@ -278,9 +278,9 @@ class Triangle extends Surface {
     this.c = p3; // c
 
     //Normale
-    var a_b = Vector3.subtract([], p2,p1);
+    var a_b = Vector3.subtract([], p1,p2);
     var a_c = Vector3.subtract([], p1,p3);
-    this.normal = Vector3.normalize([], Vector3.cross([], a_b, a_c));
+    this.normal = Vector3.normalize([], Vector3.cross([], a_c, a_b));
     // if (test < 1) { console.log(this.normal); test++; }
   }
 
@@ -516,7 +516,6 @@ function render() {
           color = surfaces[k].shade(ray, point, n);
           
           setPixel(i, j, color);
-          if (test < 50) { console.log(n); test++; setPixel(i, j, [0, 255, 0]); }
         }
       }
 

@@ -20,7 +20,6 @@ var width;
 
 var DEBUG = false; //whether to show debug messages
 var EPSILON = 0.00001; //error margins
-var INFINITY = 999999999; //
 
 //scene to render
 var scene;
@@ -42,75 +41,13 @@ class Camera {
     // Il camera frame è necessario per usare le formule nel calcolo delle intersezioni
     // this.w = Vector3.normalize([], Vector3.scale([], this.at, -1)); // - normalize(at);
     this.w = Vector3.scale([], Vector3.normalize([], this.at), -1);
-    //var dir = Vector3.subtract([], eye, at);
-    //this.w = Vector3.scale([], Vector3.normalize([], dir), -1);
     this.u = Vector3.normalize([], Vector3.cross([], this.up, this.w)); //normalize(up * w)
     this.v = Vector3.cross([], this.w, this.u); //w * u;
 
     // console.log(this.w, this.u, this.v);
-
-    //Calcolo la ViewMatrix
-    //this.viewMatrix = makeViewMatrix();
   }
 
-  
-  makeViewMatrix() { //calcola la ViewMatrix
-    var eyeX = this.eye[0], eyeY = this.eye[1], eyeZ = this.eye[2];
-    var centerX = this.at[0], centerY = this.at[1], centerZ = this.at[2];
-    var upX = this.up[0], upY = this.up[1], upZ = this.up[2];
-    var fx, fy, fz, rlf, sx, sy, sz, rls, ux, uy, uz;
-    
-    fx = centerX - eyeX;
-    fy = centerY - eyeY;
-    fz = centerZ - eyeZ;
-    
-    // Normalize f.
-    rlf = 1 / Math.sqrt(fx*fx + fy*fy + fz*fz);
-    fx *= rlf;
-    fy *= rlf;
-    fz *= rlf;
-    
-    // Calculate cross product of f and up.
-    sx = fy * upZ - fz * upY;
-    sy = fz * upX - fx * upZ;
-    sz = fx * upY - fy * upX;
-    
-    // Normalize s.
-    rls = 1 / Math.sqrt(sx*sx + sy*sy + sz*sz);
-    sx *= rls;
-    sy *= rls;
-    sz *= rls;
-    
-    // Calculate cross product of s and f.
-    ux = sy * fz - sz * fy;
-    uy = sz * fx - sx * fz;
-    uz = sx * fy - sy * fx;
-    
-    // Set to this.
-    var e = Matrix4.create();
-    e[0] = sx;
-    e[1] = ux;
-    e[2] = -fx;
-    e[3] = 0;
-    
-    e[4] = sy;
-    e[5] = uy;
-    e[6] = -fy;
-    e[7] = 0;
-    
-    e[8] = sz;
-    e[9] = uz;
-    e[10] = -fz;
-    e[11] = 0;
-    
-    e[12] = 0;
-    e[13] = 0;
-    e[14] = 0;
-    e[15] = 1;
-
-    return e;
-  }
-
+  //makeViewMatrix() { ... }
 
   castRay(x,y) { //calcola il raggio che parte dalla camera e interseca il punto (x,y) nel rettangolo di vista
     //Calcolo la direzione del raggio.
@@ -153,9 +90,8 @@ class Surface { // così modifichiamo uno shader unico per tutto
   }
 
   shade(ray, point, n) {
-
     var color = Vector3.create();
-    //var v = Vector3.scale([],ray.getDirection(),-1); //v -> camera direction (view)
+    //var v = Vector3.scale([],ray.dir,-1); //v -> camera direction (view)
     var v = Vector3.normalize([], Vector3.subtract([], camera.eye, point)); //uguale a sopra perchè il raggio è emesso dalla camera!
     v = Vector3.normalize([], v);
 
@@ -173,43 +109,52 @@ class Surface { // così modifichiamo uno shader unico per tutto
       else { //le luci ambientali non influenzano comp. diffusa e speculare (include luci direzionali e puntiformi)
         
         //Componente Diffusa
-        // l = norm( posizione luce - punto intersezione )
-        var l = Vector3.create();
-        if (light.source == "Point")
-          l = Vector3.normalize([], Vector3.subtract([], light.position, point)); // le luci direzionali non hanno posizione
-        else if (light.source == "Directional") {
-          l[0] = -light.direction[0];
-          l[1] = -light.direction[1];
-          l[2] = -light.direction[2];
-          l = Vector3.normalize([], l);
-        }
-      
-        // if (test < 1 && light.source == "Directional") {console.log(light.direction); test++;}
+        var l = Vector3.scale([],light.getDirection(point), -1); //prende la direzione giusta a seconda del tipo di luce
 
-        var nDotL = Vector3.dot(n, l); //angolo tra normale e raggio di luce!
+        var nDotL = Vector3.dot(n, l); //coseno dell'angolo tra normale e raggio di luce!
         nDotL = Math.max(nDotL, 0.0);
         
         diffuse[0] = this.material.kd[0] * light.color[0] * nDotL;
         diffuse[1] = this.material.kd[1] * light.color[1] * nDotL;
         diffuse[2] = this.material.kd[2] * light.color[2] * nDotL;
-        Vector3.add(color, color, diffuse);
-        // if (test < 100) {console.log(color); test++;}
 
-        //Componente Speculare
-        // if (nDotL > 0) {
-          var v = Vector3.normalize([], Vector3.subtract([], camera.eye, point)); // norm(cameraPos - point)
-          var h = Vector3.normalize([], Vector3.add([], v, l) ); //norm( v + l )
-          var nDoth = Vector3.dot(n, h);
-          nDoth = Math.max(nDoth, 0.0);
+        Vector3.add(color, color, diffuse);
+       
+        //Componente Speculare (metodo Phong per Ray-Tracing, Lezione 24, slide 34)
+        //calcola il vettore riflesso r
+        var r = Vector3.create();
+        r[0] = 2*nDotL* n[0] - l[0];
+        r[1] = 2*nDotL* n[1] - l[1];
+        r[2] = 2*nDotL* n[2] - l[2];
+        
+        //calcola intensità lobo di luce
+        var RdotV = Math.max(0.0, Vector3.dot(r,v));
+        var shine = Math.pow(RdotV, this.material.shininess);
+        
+        //calcola riflesso
+        specular[0] = light.color[0] * this.material.ks[0] * shine;
+        specular[1] = light.color[1] * this.material.ks[1] * shine;
+        specular[2] = light.color[2] * this.material.ks[2] * shine;
+       
+        
+        /* //Componente Speculare classica
+        //var v = Vector3.normalize([], Vector3.subtract([], camera.eye, point));
+        var h = Vector3.normalize([], Vector3.add([], v, l) ); //norm( norm(cameraPos - point) + l )
+        var nDoth = Vector3.dot(normal, h);
+        nDoth = Math.max(nDoth, 0.0);
+        if (test < 20) console.log("nDoth: "+nDoth);
           
-          //calcola la componente speculare specular = color * materiale.ks * (nDoth ^ materiale.shininess)
-          specular[0] = light.color[0] * this.material.ks[0] * Math.pow(nDoth, this.material.shininess);
-          specular[1] = light.color[1] * this.material.ks[1] * Math.pow(nDoth, this.material.shininess);
-          specular[2] = light.color[2] * this.material.ks[2] * Math.pow(nDoth, this.material.shininess);
-          // if (test < 10) { console.log(light.color, "*", this.material.ks, "*(", nDoth, "^", this.material.shininess, " = ", specular); test++; }
-          
-          Vector3.add(color, color, specular);
-        // }
+        //calcola la componente speculare = color*materiale.ks * (hDotN ^ materiale.specular)
+        specular[0] = light.color[0] * this.material.ks[0] * Math.pow(nDoth, this.material.shininess);
+        specular[1] = light.color[1] * this.material.ks[1] * Math.pow(nDoth, this.material.shininess);
+        specular[2] = light.color[2] * this.material.ks[2] * Math.pow(nDoth, this.material.shininess);
+         */
+        //if (test < 20) console.log("specular: "+specular);
+        //if (test<20) console.log("intensity: "+intensity);
+
+        //if (test < 1) { console.log(this.material.ks); test++; }
+        Vector3.add(color, color, specular);
+        test++;
       }
     }
     return color;
@@ -222,33 +167,36 @@ class Sphere extends Surface {
     // super(transforms);
     this.center = center;
     this.radius = radius;
-    //this.material = material;
   }
 
   intersects(ray) {
-    
     var M_inv = Matrix4.invert([], this.M);
-    var temp = Matrix4.fromValues(
+
+    //Allineo il raggio al SdR trasformato
+    var temp;
+    /* temp = Matrix4.fromValues(
       ray.a[0], 0, 0, 0,
       ray.a[1], 0, 0, 0,
       ray.a[2], 0, 0, 0,
-      0, 0, 0, 0
-    );
+      1,        0, 0, 0
+    ); */
+    temp = Vector4.fromValues(ray.a[0],ray.a[1],ray.a[2],1);
     temp = Matrix4.multiply([], M_inv, temp);
-    var ray_e = Vector3.fromValues(temp[0], temp[1], temp[2]);
+    var ray_e = Vector3.fromValues(temp[0], temp[1], temp[2]); //origine "trasformata"
     
-    temp = Matrix4.fromValues(
+    /* temp = Matrix4.fromValues(
       ray.dir[0], 0, 0, 0,
       ray.dir[1], 0, 0, 0,
       ray.dir[2], 0, 0, 0,
-      1, 0, 0, 0
-    )
+      0,          0, 0, 0
+    ); */
+    temp = Vector4.fromValues(ray.dir[0],ray.dir[1],ray.dir[2],0);
     temp = Matrix4.multiply([], M_inv, temp);
-    var ray_d = Vector3.fromValues(temp[0], temp[1], temp[2]);
+    var ray_d = Vector3.fromValues(temp[0], temp[1], temp[2]); //direzione "trasformata"
 
     if (test < 1) {console.log(ray_e, ray_d); test++;}
 
-    //Implementa formula sulle slide del prof
+    //Metodo analitico (Lezione 24, slide 14)
     var p = Vector3.subtract([], ray_e, this.center); //e - c
     var d = ray_d;
     //console.log("p: "+p+"; d: "+d);
@@ -265,11 +213,13 @@ class Sphere extends Surface {
 
     
     if (delta >= 0) {
-      var t1 = (-ddotp + Math.sqrt(delta)) / dsquare;
-      var t2 = (-ddotp - Math.sqrt(delta)) / dsquare; // più vicino
+      var t1 = (-ddotp - Math.sqrt(delta)) / dsquare;
+      var t2 = (-ddotp + Math.sqrt(delta)) / dsquare; // più vicino
       // if (test < 2) {console.log(t1, t2); test++;}
       //Quale dei due usiamo??
-      return t2;
+      if (t1 > 0) return t1;
+      if (t2 > 0) return t2; //la camera è dentro la sfera!
+      else return false //sfera dietro alla camera: non la disegno
     } 
     else return false;
 
@@ -300,7 +250,6 @@ class Triangle extends Surface {
   }
 
   intersects(ray) {
-
     var A = Matrix3.fromValues(
       this.a[0]-this.b[0], this.a[0]-this.c[0], ray.dir[0],
       this.a[1]-this.b[1], this.a[1]-this.c[1], ray.dir[1],
@@ -353,7 +302,7 @@ class Triangle extends Surface {
 class Ray {
   constructor(a,dir) {
     this.a = a; //origine
-    this.dir = dir; //direzione
+    this.dir = Vector3.normalize([],dir); //direzione
   }
   
   pointAt(t) {
@@ -443,7 +392,7 @@ function loadSceneFile(filepath) {
   scene = Utils.loadJSON(filepath); //load the scene
   heigth = 2*Math.tan(rad(scene.camera.fovy/2.0));
   width = heigth * aspect;
-  // console.log(scene.camera); loading is ok
+  // console.log(scene.camera); //loading is ok
 
   //set up camera
   aspect = scene.camera.aspect;
@@ -469,14 +418,10 @@ function loadSceneFile(filepath) {
     //crea oggetto corrispondente
     if (scene.surfaces[i].shape == "Sphere") {
       surfaces.push(new Sphere(scene.surfaces[i].center, scene.surfaces[i].radius, mat, transforms));
-      // console.log(surfaces[i]);
     }
     if (scene.surfaces[i].shape == "Triangle") {
       surfaces.push(new Triangle(scene.surfaces[i].p1, scene.surfaces[i].p2, scene.surfaces[i].p3, mat, transforms));
-      // console.log(surfaces[i]);
     }
-
-    // console.log(surfaces[i]);
 
   }
 
@@ -486,11 +431,9 @@ function loadSceneFile(filepath) {
     var light = scene.lights[i];
     if (light.source == "Ambient") {
       lights.push(new AmbientLight(light.color));
-      //console.log("type: "+light.source+" color: "+light.color);
     }
     else if (light.source == "Point")  {
       lights.push(new PointLight(light.color, light.position));
-      //console.log("type: "+light.source+" color: "+light.color);
     }
     else if (light.source == "Directional") {
       lights.push(new DirectionalLight(light.color, light.direction));
@@ -516,15 +459,11 @@ function render() {
   var ray, t, color, point, n;
   for (var j = 0; j <= canvas.height; j++) { //indice bordo sinistro se i=0 (bordo destro se i = nx-1)
     for (var i = 0; i <= canvas.width;  i++) {
-      var tprev = INFINITY;
-      var surface = null;
-
       u = (w*i/(canvas.width-1)) - w/2.0;
       v = (-h*j/(canvas.height-1)) + h/2.0;
 
       //fire a ray though each pixel
       var ray = camera.castRay(u, v);
-      //if (i < 1 && j< 10) console.log(ray);
 
       //Trova l'oggetto più vicino alla camera
       t = false; color = backgroundcolor;
@@ -532,27 +471,27 @@ function render() {
       var k_min = 0;
       for (var k = 0; k < surfaces.length; k++) { //for every surface in the scene
         //calculate the intersection of that ray with the scene
-        t = surfaces[k].intersects(ray); //TODO: intersects(ray,tmin tmax)
+        t = surfaces[k].intersects(ray);
         if (t != false && (t_min == false || t <= t_min)) {
           t_min = t;
           k_min = k;
         }
       }
         
-        //set the pixel to be the color of that intersection (using setPixel() method)
-        if (t_min == false) setPixel(i, j, backgroundcolor);
-        else {
-          //Shading computation
-          point = ray.pointAt(t_min); // corretto
+      //set the pixel to be the color of that intersection (using setPixel() method)
+      if (t_min == false) setPixel(i, j, backgroundcolor);
+      else {
+        //Shading computation
+        point = ray.pointAt(t_min); // corretto
+        
+        n = surfaces[k_min].getNormal(point);
           
-          n = surfaces[k_min].getNormal(point);
+        //compute color influenced by lighting
+        color = surfaces[k_min].shade(ray, point, n);
           
-          //compute color influenced by lighting
-          color = surfaces[k_min].shade(ray, point, n);
-          
-          setPixel(i, j, color);
-          // if (test < 10) { console.log( k_min ); test++; setPixel(i, j, [0, 255, 0]); }
-        }
+        setPixel(i, j, color);
+        // if (test < 10) { console.log( k_min ); test++; setPixel(i, j, [0, 255, 0]); }
+      }
 
     }
   }
@@ -612,3 +551,63 @@ $(document).ready(function(){
   // });
 
 });
+
+
+
+
+/* makeViewMatrix() { //calcola la ViewMatrix
+  var eyeX = this.eye[0], eyeY = this.eye[1], eyeZ = this.eye[2];
+  var centerX = this.at[0], centerY = this.at[1], centerZ = this.at[2];
+  var upX = this.up[0], upY = this.up[1], upZ = this.up[2];
+  var fx, fy, fz, rlf, sx, sy, sz, rls, ux, uy, uz;
+  
+  fx = centerX - eyeX;
+  fy = centerY - eyeY;
+  fz = centerZ - eyeZ;
+  
+  // Normalize f.
+  rlf = 1 / Math.sqrt(fx*fx + fy*fy + fz*fz);
+  fx *= rlf;
+  fy *= rlf;
+  fz *= rlf;
+  
+  // Calculate cross product of f and up.
+  sx = fy * upZ - fz * upY;
+  sy = fz * upX - fx * upZ;
+  sz = fx * upY - fy * upX;
+  
+  // Normalize s.
+  rls = 1 / Math.sqrt(sx*sx + sy*sy + sz*sz);
+  sx *= rls;
+  sy *= rls;
+  sz *= rls;
+  
+  // Calculate cross product of s and f.
+  ux = sy * fz - sz * fy;
+  uy = sz * fx - sx * fz;
+  uz = sx * fy - sy * fx;
+  
+  // Set to this.
+  var e = Matrix4.create();
+  e[0] = sx;
+  e[1] = ux;
+  e[2] = -fx;
+  e[3] = 0;
+  
+  e[4] = sy;
+  e[5] = uy;
+  e[6] = -fy;
+  e[7] = 0;
+  
+  e[8] = sz;
+  e[9] = uz;
+  e[10] = -fz;
+  e[11] = 0;
+  
+  e[12] = 0;
+  e[13] = 0;
+  e[14] = 0;
+  e[15] = 1;
+
+  return e;
+} */

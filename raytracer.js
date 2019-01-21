@@ -69,32 +69,45 @@ class Surface { // così modifichiamo uno shader unico per tutto
   constructor(material, transforms) {
     this.material = material;
     this.M = Matrix4.create();
-    for (var i = 0; i < transforms.length; i++) {
+    //for (var i = transforms.length-1; i >= 0; i--) {
+    for (var i = 0; i <transforms.length; i++) {
       switch (transforms[i][0]) {
 
         case "Translate":
-          this.M = Matrix4.multiply([], Matrix4.fromTranslation([], transforms[i][1]), this.M);
+          this.M = Matrix4.multiply([], this.M, Matrix4.fromTranslation([], transforms[i][1]));
         break;
 
         case "Rotate":
-          this.M = Matrix4.multiply([], Matrix4.fromXRotation([], rad(transforms[i][1][0])), this.M);
-          this.M = Matrix4.multiply([], Matrix4.fromYRotation([], rad(transforms[i][1][1])), this.M);
-          this.M = Matrix4.multiply([], Matrix4.fromZRotation([], rad(transforms[i][1][2])), this.M);
+          this.M = Matrix4.multiply([], this.M, Matrix4.fromXRotation([], rad(transforms[i][1][0])));
+          this.M = Matrix4.multiply([], this.M, Matrix4.fromYRotation([], rad(transforms[i][1][1])));
+          this.M = Matrix4.multiply([], this.M, Matrix4.fromZRotation([], rad(transforms[i][1][2])));
         break;
 
         case "Scale":
-          this.M = Matrix4.multiply([], Matrix4.fromScaling([], transforms[i][1]), this.M);
+          this.M = Matrix4.multiply([], this.M, Matrix4.fromScaling([], transforms[i][1]));
         break;
       }
     }
+    //calcola una volta sola le matrici per trasformare raggi e normali per velocizzare il rendering
+    this.M_inv = Matrix4.invert([], this.M);
+    this.normalMatrix = Matrix4.transpose([], this.M_inv);
   }
 
   shade(ray, point, n) {
+    //Trasformazioni
+    ray = this.transformRay(ray); //
+    //n = Matrix4.multiply([], this.normalMatrix, Vector4.fromValues(n[0],n[1],n[2],0)); //spostato in getNormal()
+    //n = Vector3.fromValues(n[0],n[1],n[2]);
+    point = Matrix4.multiply([], this.M, Vector4.fromValues(point[0],point[1],point[2],0));
+    point = Vector3.fromValues(point[0],point[1],point[2]);
+
     var color = Vector3.create();
+    //Calcolo il vettore vista (lo faccio qui perchè tanto non cambia rispetto alle luci)
     //var v = Vector3.scale([],ray.dir,-1); //v -> camera direction (view)
     var v = Vector3.normalize([], Vector3.subtract([], camera.eye, point)); //uguale a sopra perchè il raggio è emesso dalla camera!
     v = Vector3.normalize([], v);
 
+    //Calcolo illuminazione
     for (var i = 0; i < scene.lights.length; i++) {
       var light = lights[i];
       
@@ -106,8 +119,8 @@ class Surface { // così modifichiamo uno shader unico per tutto
         ambient = Vector3.multiply([], this.material.ka, light.color);
         Vector3.add(color, color, ambient);
       }
-      else { //le luci ambientali non influenzano comp. diffusa e speculare (include luci direzionali e puntiformi)
-        
+      else { //Luci Direzionali e Puntiformi (lee luci ambientali non influenzano comp. diffusa e speculare)
+
         //Componente Diffusa
         var l = Vector3.scale([],light.getDirection(point), -1); //prende la direzione giusta a seconda del tipo di luce
 
@@ -137,10 +150,10 @@ class Surface { // così modifichiamo uno shader unico per tutto
         specular[2] = light.color[2] * this.material.ks[2] * shine;
        
         
-        /* //Componente Speculare classica
+        /* //Componente Speculare (metodo libro)
         //var v = Vector3.normalize([], Vector3.subtract([], camera.eye, point));
         var h = Vector3.normalize([], Vector3.add([], v, l) ); //norm( norm(cameraPos - point) + l )
-        var nDoth = Vector3.dot(normal, h);
+        var nDoth = Vector3.dot(n, h);
         nDoth = Math.max(nDoth, 0.0);
         if (test < 20) console.log("nDoth: "+nDoth);
           
@@ -159,6 +172,33 @@ class Surface { // così modifichiamo uno shader unico per tutto
     }
     return color;
   }
+
+  transformRay(ray) {
+     //Allineo il raggio al SdR trasformato
+     var temp;
+     /* temp = Matrix4.fromValues(
+       ray.a[0], 0, 0, 0,
+       ray.a[1], 0, 0, 0,
+       ray.a[2], 0, 0, 0,
+       1,        0, 0, 0
+     ); */
+     temp = Vector4.fromValues(ray.a[0],ray.a[1],ray.a[2],1);
+     temp = Matrix4.multiply([], this.M_inv, temp);
+     var ray_e = Vector3.fromValues(temp[0], temp[1], temp[2]); //origine "trasformata"
+     
+     /* temp = Matrix4.fromValues(
+       ray.dir[0], 0, 0, 0,
+       ray.dir[1], 0, 0, 0,
+       ray.dir[2], 0, 0, 0,
+       0,          0, 0, 0
+     ); */
+     temp = Vector4.fromValues(ray.dir[0],ray.dir[1],ray.dir[2],0);
+     temp = Matrix4.multiply([], this.M_inv, temp);
+     var ray_d = Vector3.fromValues(temp[0], temp[1], temp[2]); //direzione "trasformata"
+ 
+     if (test < 1) {console.log(ray_e, ray_d); test++;}
+     return new Ray(ray_e, ray_d);
+  }
 }
 
 class Sphere extends Surface {
@@ -170,35 +210,11 @@ class Sphere extends Surface {
   }
 
   intersects(ray) {
-    var M_inv = Matrix4.invert([], this.M);
-
-    //Allineo il raggio al SdR trasformato
-    var temp;
-    /* temp = Matrix4.fromValues(
-      ray.a[0], 0, 0, 0,
-      ray.a[1], 0, 0, 0,
-      ray.a[2], 0, 0, 0,
-      1,        0, 0, 0
-    ); */
-    temp = Vector4.fromValues(ray.a[0],ray.a[1],ray.a[2],1);
-    temp = Matrix4.multiply([], M_inv, temp);
-    var ray_e = Vector3.fromValues(temp[0], temp[1], temp[2]); //origine "trasformata"
-    
-    /* temp = Matrix4.fromValues(
-      ray.dir[0], 0, 0, 0,
-      ray.dir[1], 0, 0, 0,
-      ray.dir[2], 0, 0, 0,
-      0,          0, 0, 0
-    ); */
-    temp = Vector4.fromValues(ray.dir[0],ray.dir[1],ray.dir[2],0);
-    temp = Matrix4.multiply([], M_inv, temp);
-    var ray_d = Vector3.fromValues(temp[0], temp[1], temp[2]); //direzione "trasformata"
-
-    if (test < 1) {console.log(ray_e, ray_d); test++;}
+    ray = this.transformRay(ray); //allinea il raggio al SdR della superficie trasformata
 
     //Metodo analitico (Lezione 24, slide 14)
-    var p = Vector3.subtract([], ray_e, this.center); //e - c
-    var d = ray_d;
+    var p = Vector3.subtract([], ray.a, this.center); //e - c
+    var d = ray.dir;
     //console.log("p: "+p+"; d: "+d);
     
     var ddotp = Vector3.dot(d,p);
@@ -228,7 +244,12 @@ class Sphere extends Surface {
   getNormal(point) {
     var n = Vector3.create();
     n = Vector3.subtract([], point, this.center);
+    //n = Vector3.subtract([], this.center, point);
     n = Vector3.normalize([], n);
+
+    //Trasformo la normale
+    n = Matrix4.multiply([], this.normalMatrix, Vector4.fromValues(n[0],n[1],n[2],0));
+    n = Vector3.fromValues(n[0],n[1],n[2]);
     return n;
   }
   
@@ -250,6 +271,8 @@ class Triangle extends Surface {
   }
 
   intersects(ray) {
+    ray = this.transformRay(ray); //allinea il raggio al SdR della superficie trasformata
+
     var A = Matrix3.fromValues(
       this.a[0]-this.b[0], this.a[0]-this.c[0], ray.dir[0],
       this.a[1]-this.b[1], this.a[1]-this.c[1], ray.dir[1],
@@ -451,7 +474,8 @@ function loadSceneFile(filepath) {
 //renders the scene
 function render() {
   var h,w,u,v;
-  var backgroundcolor = [0,0,0]; //lascia un colore diverso dal nero così si vede se il calcolo della luce sbaglia a calcolare i colori o non funziona proprio
+  var backgroundcolor = [0, 1, 0.2];
+  //var backgroundcolor = [0, 1, 0.2]; //TEST
   var start = Date.now(); //for logging
   h = 2*Math.tan(rad(scene.camera.fovy/2.0));
   w = h * aspect;

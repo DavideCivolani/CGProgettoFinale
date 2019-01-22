@@ -214,7 +214,7 @@ class Surface { // così modifichiamo uno shader unico per tutto
         specular[0] = light.color[0] * this.material.ks[0] * Math.pow(nDoth, this.material.shininess);
         specular[1] = light.color[1] * this.material.ks[1] * Math.pow(nDoth, this.material.shininess);
         specular[2] = light.color[2] * this.material.ks[2] * Math.pow(nDoth, this.material.shininess);
-         */
+        */
         //if (test < 20) console.log("specular: "+specular);
         //if (test<20) console.log("intensity: "+intensity);
 

@@ -128,68 +128,74 @@ class Camera {
 class Surface { // così modifichiamo uno shader unico per tutto
   constructor(material, transforms) {
     this.material = material;
-    this.M_point = Matrix4.create();
-    this.M_dir = Matrix4.create();
-    this.M_norm = Matrix4.create();
-    for (var i = 0; i < transforms.length; i++) {
+    this.M_translate = Matrix4.create();
+    this.M_rotate = Matrix4.create();
+    this.M_scaling = Matrix4.create();
+    this.M_transformation = Matrix4.create();
+    this.M = Matrix4.create();
+    for (var i = (transforms.length)-1; i > -1; i--) { // ordine???????
       switch (transforms[i][0]) {
 
         case "Translate":
-          this.M_point = Matrix4.multiply([], Matrix4.fromTranslation([], transforms[i][1]), this.M_point);
+          this.M_translate = Matrix4.fromTranslation([], transforms[i][1]);
+          this.M_transformation = this.M_translate;
           // if (test < 1) {console.log("Mtransl: ", this.M); test++;}
         break;
 
         case "Rotate":
-          this.M_point = Matrix4.multiply([], Matrix4.fromXRotation([], rad(transforms[i][1][0])), this.M_point);
-          this.M_point = Matrix4.multiply([], Matrix4.fromYRotation([], rad(transforms[i][1][1])), this.M_point);
-          this.M_point = Matrix4.multiply([], Matrix4.fromZRotation([], rad(transforms[i][1][2])), this.M_point);
-
-          this.M_dir = Matrix4.multiply([], Matrix4.fromXRotation([], rad(transforms[i][1][0])), this.M_dir);
-          this.M_dir = Matrix4.multiply([], Matrix4.fromYRotation([], rad(transforms[i][1][1])), this.M_dir);
-          this.M_dir = Matrix4.multiply([], Matrix4.fromZRotation([], rad(transforms[i][1][2])), this.M_dir);
-
-          this.M_norm = Matrix4.multiply([], Matrix4.fromXRotation([], rad(transforms[i][1][0])), this.M_norm);
-          this.M_norm = Matrix4.multiply([], Matrix4.fromYRotation([], rad(transforms[i][1][1])), this.M_norm);
-          this.M_norm = Matrix4.multiply([], Matrix4.fromZRotation([], rad(transforms[i][1][2])), this.M_norm);
+          this.M_rotate = Matrix4.fromZRotation([], rad(transforms[i][1][2]));
+          this.M_rotate = Matrix4.multiply([], this.M_rotate, Matrix4.fromYRotation([], rad(transforms[i][1][1])));
+          this.M_rotate = Matrix4.multiply([], this.M_rotate, Matrix4.fromXRotation([], rad(transforms[i][1][0])));
+          this.M_transformation = this.M_rotate;
           // if (test < 1) {console.log( rad(transforms[i][1][0]), rad(transforms[i][1][1]), rad(transforms[i][1][2]) ); test++;}
         break;
 
         case "Scale":
-          this.M_point = Matrix4.multiply([], Matrix4.fromScaling([], transforms[i][1]), this.M_point);
-
-          this.M_dir = Matrix4.multiply([], Matrix4.fromScaling([], transforms[i][1]), this.M_dir);
-
-          this.M_norm = Matrix4.multiply([], Matrix4.invert([], Matrix4.fromScaling([], transforms[i][1])), this.M_norm);
+          this.M_scaling = Matrix4.fromScaling([], transforms[i][1]);
+          this.M_transformation = this.M_scaling;
           // if (test < 1) {console.log("Mscala: ", this.M); test++;}
         break;
       }
+      this.M = Matrix4.multiply([], this.M_transformation, this.M);
     }
-    this.M_point_inv = Matrix4.invert([], this.M_point);
-    this.M_dir_inv = Matrix4.invert([], this.M_dir);
+    this.M_translate_inv = Matrix4.invert([], this.M_translate);
+    this.M_rotate_inv = Matrix4.invert([], this.M_rotate);
+    this.M_scaling_inv = Matrix4.invert([], this.M_scaling);
+
+    // metodo online
+    // this.M_point_WtoO = Matrix4.multiply([], this.M_translate_inv , Matrix4.multiply([], this.M_rotate_inv, this.M_scaling_inv ) );
+    // this.M_point_OtoW = Matrix4.multiply([], this.M_scaling , Matrix4.multiply([], this.M_rotate, this.M_translate ) );
+
+    // this.M_dir_WtoO = Matrix4.multiply([], this.M_rotate_inv , this.M_scaling_inv );
+    // this.M_norm_OtoW = Matrix4.multiply([], this.M_scaling_inv , this.M_rotate );
+
+    // metodo del prof
+    this.M_inv = Matrix4.invert([], this.M);
+    this.M_norm = Matrix4.transpose([], this.M_inv);
   }
 
-  WtoO_point(point) {
+  preM_inv_point(point) {
     var temp = Vector4.fromValues(point[0], point[1], point[2], 1);
-    temp = Matrix4.multiply([], this.M_point_inv, temp);
+    temp = Matrix4.multiply([], this.M_inv, temp);
     
     return Vector3.fromValues(temp[0], temp[1], temp[2]);
   }
 
-  WtoO_dir(dir) {
+  preM_inv_dir(dir) {
     var temp = Vector4.fromValues(dir[0], dir[1], dir[2], 0);
-    temp = Matrix4.multiply([], this.M_dir_inv, temp);
+    temp = Matrix4.multiply([], this.M_inv, temp);
     
     return Vector3.fromValues(temp[0], temp[1], temp[2]);
   }
 
-  OtoW_point(point) {
+  preM_point(point) {
     var temp = Vector4.fromValues(point[0], point[1], point[2], 1);
-    temp = Matrix4.multiply([], this.M_point, temp);
+    temp = Matrix4.multiply([], this.M, temp);
     
     return Vector3.fromValues(temp[0], temp[1], temp[2]);
   }
 
-  OtoW_normal(normal) {
+  preM_normal(normal) {
     var temp = Vector4.fromValues(normal[0], normal[1], normal[2], 0);
     temp = Matrix4.multiply([], this.M_norm, temp);
     
@@ -229,13 +235,13 @@ class Surface { // così modifichiamo uno shader unico per tutto
         // if (test < 1 && light.source == "Directional") {console.log(light.direction); test++;}
 
         var nDotL = Vector3.dot(n, l); //angolo tra normale e raggio di luce!
+        // if (test < 100000 && nDotL > 0) {console.log(this.material.ka[0], this.material.ka[1], this.material.ka[2]); test++;}
         nDotL = Math.max(nDotL, 0.0);
 
         diffuse[0] = this.material.kd[0] * light.color[0] * nDotL;
         diffuse[1] = this.material.kd[1] * light.color[1] * nDotL;
         diffuse[2] = this.material.kd[2] * light.color[2] * nDotL;
         Vector3.add(color, color, diffuse);
-        // if (test < 100) {console.log(color); test++;}
 
         //Componente Speculare
         // if (nDotL > 0) {
@@ -479,8 +485,11 @@ function loadSceneFile(filepath) {
     var mat = scene.materials[0];
     if ( scene.surfaces[i].hasOwnProperty('name') ) {
       // console.log("nome si");
-      for (var j=0; j < scene.materials.length; j++) 
+      for (var j=0; j < scene.materials.length; j++)
         if (scene.materials[j].name == scene.surfaces[i].name) mat = scene.materials[j];
+    }
+    else if ( scene.surfaces[i].hasOwnProperty('material') ) {
+      mat = scene.materials[scene.surfaces[i].material];
     }
     else if (i >= scene.materials.length) {
       // console.log("prendi ultimo materiale");
@@ -507,7 +516,7 @@ function loadSceneFile(filepath) {
       // console.log(surfaces[i]);
     }
 
-    // console.log(surfaces[i]);
+    console.log(surfaces[i]);
 
   }
 
@@ -557,18 +566,19 @@ function render() {
 
       t = false; color = backgroundcolor;
       var t_min = false;
-      var k_min = false;
+      var k_min = 0;
       for (var k = 0; k < surfaces.length; k++) { //for every surface in the scene
         //calculate the intersection of that ray with the scene
-        var ray_trans = new Ray( surfaces[k].WtoO_point(ray.getOrigin()), surfaces[k].WtoO_dir(ray.getDirection()) );
-        // if (test < 5) {console.log(ray.getDirection(), ray_trans.getDirection()); test++;}
+        var ray_trans = new Ray( surfaces[k].preM_inv_point(ray.getOrigin()), surfaces[k].preM_inv_dir(ray.getDirection()) );
         t = surfaces[k].intersects(ray_trans); //TODO: intersects(ray,tmin tmax)
-        if (t != false && (t_min == false || t <= t_min)) {
+
+        if (t != false && (t_min == false ||  t <= t_min)) {
           t_min = t;
           k_min = k;
         }
       }
-        
+
+        ray_trans = new Ray( surfaces[k_min].preM_inv_point(ray.getOrigin()), surfaces[k_min].preM_inv_dir(ray.getDirection()) );
         //set the pixel to be the color of that intersection (using setPixel() method)
         if (t_min == false) setPixel(i, j, backgroundcolor);
         else {
@@ -576,15 +586,14 @@ function render() {
           point = ray_trans.pointAt(t_min);
           n = surfaces[k_min].getNormal(point);
 
-          var point_trans = surfaces[k_min].OtoW_point(point);
-          var n_trans = surfaces[k_min].OtoW_normal(n);
-          
+          var point_trans = surfaces[k_min].preM_point(point);
+          var n_trans = Vector3.normalize([], surfaces[k_min].preM_normal(n));
           
           //compute color influenced by lighting
           color = surfaces[k_min].shade(point_trans, n_trans);
           
           setPixel(i, j, color);
-          // if (test < 100) { console.log( t_min ); test++; setPixel(i, j, [0, 255, 0]); }
+          // if (i > 200 && i < 220 && j > 100 && j < 120) {console.log(n_trans); setPixel(i, j, [0, 255, 0]);}
         }
 
     }

@@ -1,7 +1,7 @@
 <html>
 <head>
 	<meta http-equiv="Content-Type" content="text/html;charset=utf-8" >
-	<title>Hwk7 - Ray Tracer</title>
+	<title>Progetto Finale - Ray Tracer</title>
 
 	<script type="text/javascript" src="libs/jquery-3.3.1.js"></script>
 	<script type="text/javascript" src="libs/gl-matrix.js"></script>
@@ -19,7 +19,22 @@
 	<div>
 		<p>
 			Scene: <code>assets/</code>
-			<input type="text" id="scene_file_input" value="SphereShadingTest1">
+			<!-- <input type="select" list=assets_list id="scene_file_input">
+			<datalist id="assets_list">
+			</datalist> -->
+			<select id="scene_file_input">
+				<option value="SphereTest">SphereTest</option>
+					<option value="TriangleTest">TriangleTest</option>
+					<option value="SphereShadingTest1">SphereShadingTest1</option>
+					<option value="SphereShadingTest2">SphereShadingTest2</option>
+					<option value="TriangleShadingTest">TriangleShadingTest</option>
+					<option value="TransformationTest" selected>TransformationTest</option>
+					<option value="ShadowTest1">ShadowTest1</option>
+					<option value="ShadowTest2">ShadowTest2</option>
+					<option value="RecursiveTest">RecursiveTest</option>
+					<option value="CornellBox">CornellBox</option>
+					<option value="FullTest">FullTest</option>
+			</select>
 			<code>.json</code>
 			<span style="padding-left:1em">&nbsp;</span> 
 			<button id="load_scene_button">Load Scene</button>

@@ -172,54 +172,68 @@ class Surface { // così modifichiamo uno shader unico per tutto
         Vector3.add(color, color, ambient);
       }
       else { //Luci Direzionali e Puntiformi (lee luci ambientali non influenzano comp. diffusa e speculare)
-
-        //Componente Diffusa
+        
+        //Ombre
         var l = Vector3.scale([],light.getDirection(point), -1); //prende la direzione giusta a seconda del tipo di luce
+        var shadowRay = new Ray(point,l);
+        var ts = false;
+        for (var k=0; !ts && k < surfaces.length; k++) {
+          ts = surfaces[k].intersects(shadowRay);
+          if (ts < EPSILON) ts = false; //evita che shadowRay intersechi la superficie da cui parte
+          //if (test < 10) console.log(ts);
+        }
 
-        var nDotL = Vector3.dot(n, l); //coseno dell'angolo tra normale e raggio di luce!
-        // if (test < 100000 && nDotL > 0) {console.log(this.material.ka[0], this.material.ka[1], this.material.ka[2]); test++;}
-        nDotL = Math.max(nDotL, 0.0);
-        
-        diffuse[0] = this.material.kd[0] * light.color[0] * nDotL;
-        diffuse[1] = this.material.kd[1] * light.color[1] * nDotL;
-        diffuse[2] = this.material.kd[2] * light.color[2] * nDotL;
-
-        Vector3.add(color, color, diffuse);
-       
-        //Componente Speculare (metodo Phong per Ray-Tracing, Lezione 24, slide 34)
-        //calcola il vettore riflesso r
-        var r = Vector3.create();
-        r[0] = 2*nDotL* n[0] - l[0];
-        r[1] = 2*nDotL* n[1] - l[1];
-        r[2] = 2*nDotL* n[2] - l[2];
-        
-        //calcola intensità lobo di luce
-        var RdotV = Math.max(0.0, Vector3.dot(r,v));
-        var shine = Math.pow(RdotV, this.material.shininess);
-        
-        //calcola riflesso
-        specular[0] = light.color[0] * this.material.ks[0] * shine;
-        specular[1] = light.color[1] * this.material.ks[1] * shine;
-        specular[2] = light.color[2] * this.material.ks[2] * shine;
-       
-        
-        /* //Componente Speculare (metodo libro)
-        //var v = Vector3.normalize([], Vector3.subtract([], camera.eye, point)); //norm(cameraPos - point)
-        var h = Vector3.normalize([], Vector3.add([], v, l) ); //norm( v + l )
-        var nDoth = Vector3.dot(n, h);
-        nDoth = Math.max(nDoth, 0.0);
-        if (test < 20) console.log("nDoth: "+nDoth);
+        if (!ts) { //se l'oggetto non è in ombra, calcola illuminazione completa
+          //Componente Diffusa
+          var nDotL = Vector3.dot(n, l); //coseno dell'angolo tra normale e raggio di luce!
+          // if (test < 100000 && nDotL > 0) {console.log(this.material.ka[0], this.material.ka[1], this.material.ka[2]); test++;}
+          nDotL = Math.max(nDotL, 0.0);
           
-        //calcola la componente speculare = color*materiale.ks * (hDotN ^ materiale.specular)
-        specular[0] = light.color[0] * this.material.ks[0] * Math.pow(nDoth, this.material.shininess);
-        specular[1] = light.color[1] * this.material.ks[1] * Math.pow(nDoth, this.material.shininess);
-        specular[2] = light.color[2] * this.material.ks[2] * Math.pow(nDoth, this.material.shininess);
-        */
-        //if (test < 20) console.log("specular: "+specular);
-        //if (test<20) console.log("intensity: "+intensity);
+          diffuse[0] = this.material.kd[0] * light.color[0] * nDotL;
+          diffuse[1] = this.material.kd[1] * light.color[1] * nDotL;
+          diffuse[2] = this.material.kd[2] * light.color[2] * nDotL;
 
-        //if (test < 1) { console.log(this.material.ks); test++; }
-        Vector3.add(color, color, specular);
+          Vector3.add(color, color, diffuse);
+        
+          //Componente Speculare (metodo Phong per Ray-Tracing, Lezione 24, slide 34)
+          //calcola il vettore riflesso r
+          var r = Vector3.create();
+          r[0] = 2*nDotL* n[0] - l[0];
+          r[1] = 2*nDotL* n[1] - l[1];
+          r[2] = 2*nDotL* n[2] - l[2];
+          
+          //calcola intensità lobo di luce
+          var RdotV = Math.max(0.0, Vector3.dot(r,v));
+          var shine = Math.pow(RdotV, this.material.shininess);
+          
+          //calcola riflesso
+          specular[0] = light.color[0] * this.material.ks[0] * shine;
+          specular[1] = light.color[1] * this.material.ks[1] * shine;
+          specular[2] = light.color[2] * this.material.ks[2] * shine;
+        
+          
+          /* //Componente Speculare (metodo libro)
+          //var v = Vector3.normalize([], Vector3.subtract([], camera.eye, point)); //norm(cameraPos - point)
+          var h = Vector3.normalize([], Vector3.add([], v, l) ); //norm( v + l )
+          var nDoth = Vector3.dot(n, h);
+          nDoth = Math.max(nDoth, 0.0);
+          if (test < 20) console.log("nDoth: "+nDoth);
+            
+          //calcola la componente speculare = color*materiale.ks * (hDotN ^ materiale.specular)
+          specular[0] = light.color[0] * this.material.ks[0] * Math.pow(nDoth, this.material.shininess);
+          specular[1] = light.color[1] * this.material.ks[1] * Math.pow(nDoth, this.material.shininess);
+          specular[2] = light.color[2] * this.material.ks[2] * Math.pow(nDoth, this.material.shininess);
+          */
+          //if (test < 20) console.log("specular: "+specular);
+          //if (test<20) console.log("intensity: "+intensity);
+
+          //if (test < 1) { console.log(this.material.ks); test++; }
+          Vector3.add(color, color, specular);
+
+          //
+          //TODO: Componente RIFLESSA
+          //
+        }
         test++;
       }
     }
@@ -321,7 +335,6 @@ class Triangle extends Surface {
   }
 
   intersects(ray) {
-    ray = this.transformRay(ray); //allinea il raggio al SdR della superficie trasformata
 
     var A = Matrix3.fromValues(
       this.a[0]-this.b[0], this.a[0]-this.c[0], ray.dir[0],

@@ -34,15 +34,16 @@ var lights = [];
 //CLASSES PROTOTYPES
 class Camera {
   constructor(eye,up,at) {
-    this.eye = Vector3.fromValues(eye[0],eye[1],eye[2]);   // Posizione della camera  (e)
+    this.eye = Vector3.fromValues(eye[0],eye[1],eye[2]); // Posizione della camera    (e)
     this.up = Vector3.fromValues(up[0],up[1],up[2]);     // Inclinazione testa        (t)
-    this.at = Vector3.fromValues(at[0],at[1],at[2]);     // Direzione dello sguardo   (g) 
+    this.at = Vector3.fromValues(at[0],at[1],at[2]);     // Punto verso cui guardo    (?) 
+    var dir = Vector3.subtract([], this.at, this.eye);   // Direzione dello sguardo   (g)
 
     //Ricavo il camera frame {u,v,w} dai vettori eye,at,up (lezione 8, slide 19)
     // Il camera frame è necessario per usare le formule nel calcolo delle intersezioni
-    // this.w = Vector3.normalize([], Vector3.scale([], this.at, -1)); // - normalize(at);
-    this.w = Vector3.scale([], Vector3.normalize([], this.at), -1);
+    this.w = Vector3.scale([], Vector3.normalize([], dir), -1); //- normalize(dir);
     this.u = Vector3.normalize([], Vector3.cross([], this.up, this.w)); //normalize(up * w)
+    //this.u = Vector3.cross([], Vector3.normalize([],dir), this.up); //alternativa
     this.v = Vector3.cross([], this.w, this.u); //w * u;
 
     // console.log(this.w, this.u, this.v);
@@ -144,16 +145,10 @@ class Surface { // così modifichiamo uno shader unico per tutto
   }
 
 
-  shade(ray, point, n) {
-    //Trasformazioni
-    //ray = this.transformRay(ray); //già trasformato in intersect()
-    //n = Matrix4.multiply([], this.normalMatrix, Vector4.fromValues(n[0],n[1],n[2],0)); //spostato in getNormal()
-    //n = Vector3.fromValues(n[0],n[1],n[2]);
-    //var point = ray.pointAt(t_min);
-    //point = Matrix4.multiply([], this.M, Vector4.fromValues(point[0],point[1],point[2],0));
-    //point = Vector3.fromValues(point[0],point[1],point[2]);
-
+  shade(ray, point, n, bounce) {
     var color = Vector3.create();
+    var k = 0;
+
     //Calcolo il vettore vista (lo faccio qui perchè tanto non cambia rispetto alle luci)
     //var v = Vector3.scale([],ray.dir,-1); //v -> camera direction (view)
     var v = Vector3.subtract([], camera.eye, point); //uguale a sopra perchè il raggio è emesso dalla camera!
@@ -177,9 +172,9 @@ class Surface { // così modifichiamo uno shader unico per tutto
         var l = Vector3.scale([],light.getDirection(point), -1); //prende la direzione giusta a seconda del tipo di luce
         var shadowRay = new Ray(point,l);
         var ts = false;
-        for (var k=0; !ts && k < surfaces.length; k++) {
+        for (k=0; !ts && k < surfaces.length; k++) {
           ts = surfaces[k].intersects(shadowRay);
-          if (ts < EPSILON) ts = false; //evita che shadowRay intersechi la superficie da cui parte
+          if (ts < scene.shadow_bias) ts = false; //evita che shadowRay intersechi la superficie da cui parte
           //if (test < 10) console.log(ts);
         }
 
@@ -230,9 +225,30 @@ class Surface { // così modifichiamo uno shader unico per tutto
           //if (test < 1) { console.log(this.material.ks); test++; }
           Vector3.add(color, color, specular);
 
-          //
-          //TODO: Componente RIFLESSA
-          //
+          /* if (this.material.kr[0] != 0 && this.material.kr[1] != 0 && this.material.kr[1] != 0 &&
+              bounce > 0) {
+            //Componente RIFLESSA
+            bounce = bounce-1;
+            //verifico se il raggio riflesso colpisce un altro oggetto
+            var mirrorRay = new Ray(point, r);
+            var tmirror = false;
+            for (k=0; !tmirror && k<surfaces.length; k++) {
+              tmirror = surfaces[k].intersects(mirrorRay);
+              if (tmirror < EPSILON) tmirror = false;
+            }
+            if (test < 30) console.log("k:"+k);
+            if (tmirror != false) { //se si, calcolane il contributo
+              if (test < 60) console.log("bounce:"+bounce);
+              var mirrorPoint = mirrorRay.pointAt(tmirror);
+              mirrorPoint = surfaces[k].preM_point(mirrorPoint);
+              var mirrorN = surfaces[k].getNormal(mirrorPoint);
+              mirrorN = surfaces[k].preM_normal(mirrorN);
+              
+              var mirror = surfaces[k].shade(mirrorRay, mirrorPoint, mirrorN, bounce);
+              Vector3.add(color, color, Vector3.multiply([],this.material.kr,mirror));
+            }
+          } */
+
         }
         test++;
       }
@@ -598,6 +614,7 @@ function render() {
           t_min = t;
           k_min = k;
           ray_min = ray_trans; //per non ricalcolarlo più tardi
+          if (test < 30 && t_min < 0) console.log("surf: "+surfaces[k]+"tmin:"+t_min);
         }
       }
         
@@ -613,7 +630,7 @@ function render() {
         var n_trans = Vector3.normalize([], surfaces[k_min].preM_normal(n));
 
         //Invocazione shader
-        color = surfaces[k_min].shade(ray_trans, point_trans, n_trans);
+        color = surfaces[k_min].shade(ray_trans, point_trans, n_trans, scene.bounce_depth);
           
         setPixel(i, j, color);
         // if (i > 200 && i < 220 && j > 100 && j < 120) {console.log(n_trans); setPixel(i, j, [0, 255, 0]);}

@@ -31,6 +31,8 @@ var surfaces = [];
 var lights = [];
 // var materials = [];
 
+var bounce = 0;
+
 //etc...
 
 //CLASSES PROTOTYPES
@@ -147,7 +149,7 @@ class Surface { // così modifichiamo uno shader unico per tutto
   }
 
 
-  shade(ray, point, n, bounce) {
+  shade(ray, point, n) {
     var color = Vector3.create();
     var k = 0;
 
@@ -163,6 +165,7 @@ class Surface { // così modifichiamo uno shader unico per tutto
       var ambient = Vector3.create();
       var diffuse = Vector3.create();
       var specular = Vector3.create();
+      var reflex = Vector3.create();
 
       if (scene.lights[i].source == "Ambient") {
         ambient = Vector3.multiply([], this.material.ka, light.color);
@@ -197,13 +200,22 @@ class Surface { // così modifichiamo uno shader unico per tutto
         
           //Componente Speculare (metodo Phong per Ray-Tracing, Lezione 24, slide 34)
           //calcola il vettore riflesso r
-          var r = Vector3.create();
-          r[0] = 2*nDotL* n[0] - l[0];
-          r[1] = 2*nDotL* n[1] - l[1];
-          r[2] = 2*nDotL* n[2] - l[2];
+          var r1 = Vector3.create();
+          r1[0] = 2*nDotL* n[0] - l[0];
+          r1[1] = 2*nDotL* n[1] - l[1];
+          r1[2] = 2*nDotL* n[2] - l[2];
+
+          var dDotn = Vector3.dot(ray.getDirection(), n);
+          var r2 = Vector3.create();
+          r2[0] = ray.getDirection()[0] - 2 * (dDotn) * n[0];
+          r2[1] = ray.getDirection()[1] - 2 * (dDotn) * n[1];
+          r2[2] = ray.getDirection()[2] - 2 * (dDotn) * n[2];
           
           //calcola intensità lobo di luce
-          var RdotV = Math.max(0.0, Vector3.dot(r,v));
+          if (bounce == 0)
+            var RdotV = Math.max(0.0, Vector3.dot(r1,v));
+          else
+            var RdotV = Math.max(0.0, Vector3.dot(r2,v));
           var shine = Math.pow(RdotV, this.material.shininess);
           
           //calcola riflesso
@@ -230,32 +242,23 @@ class Surface { // così modifichiamo uno shader unico per tutto
           //if (test < 1) { console.log(this.material.ks); test++; }
           Vector3.add(color, color, specular);
 
-          /* if (this.material.kr[0] != 0 && this.material.kr[1] != 0 && this.material.kr[1] != 0 &&
-              bounce > 0) {
-            //Componente RIFLESSA
-            bounce = bounce-1;
-            //verifico se il raggio riflesso colpisce un altro oggetto
-            var mirrorRay = new Ray(biaspoint, r);
-            var tmirror = false;
-            for (k=0; !tmirror && k<surfaces.length; k++) {
-              tmirror = surfaces[k].intersects(mirrorRay);
-              if (tmirror < EPSILON) tmirror = false;
-            }
-            if (test < 30) console.log("k:"+k);
-            if (tmirror != false) { //se si, calcolane il contributo
-              if (test < 60) console.log("bounce:"+bounce);
-              var mirrorPoint = mirrorRay.pointAt(tmirror);
-              mirrorPoint = surfaces[k].preM_point(mirrorPoint);
-              var mirrorN = surfaces[k].getNormal(mirrorPoint);
-              mirrorN = surfaces[k].preM_normal(mirrorN);
-              
-              var mirror = surfaces[k].shade(mirrorRay, mirrorPoint, mirrorN, bounce);
-              Vector3.add(color, color, Vector3.multiply([],this.material.kr,mirror));
-            }
-          } */
+          if (bounce <= scene.bounce_depth) {
+            bounce++;
+
+            var ray = new Ray(point, r2);
+
+            var reflex_color = hit(ray);
+            reflex[0] = this.material.kr[0] * reflex_color[0];
+            reflex[1] = this.material.kr[1] * reflex_color[1];
+            reflex[2] = this.material.kr[2] * reflex_color[2];
+
+            Vector3.add(color, color, reflex);
+            
+            // if (test < 10) {console.log(reflex_color); test++;}
+          }
+          
 
         }
-        test++;
       }
     }
     return color;
@@ -632,57 +635,18 @@ function render() {
   h = 2*Math.tan(rad(scene.camera.fovy/2.0));
   w = h * aspect;
 
-  var ray, t, color, point, n, ray_trans;
+  var ray, color;
   for (var j = 0; j <= canvas.height; j++) { //indice bordo sinistro se i=0 (bordo destro se i = nx-1)
     for (var i = 0; i <= canvas.width;  i++) {
+      bounce = 0;
       u = (w*i/(canvas.width-1)) - w/2.0;
       v = (-h*j/(canvas.height-1)) + h/2.0;
       
       //fire a ray though each pixel
       var ray = camera.castRay(u, v);
 
-      //Calcola l'intersezione raggio-scena
-      var t_min = false; var k_min = 0, ray_min = null;      
-      for (var k = 0; k < surfaces.length; k++) {
-        //trasforma il raggio per rispettare le trasformazioni della superficie corrente
-        var ray_a_trans = surfaces[k].preM_inv_point(ray.getOrigin());
-        var ray_dir_trans = surfaces[k].preM_inv_dir(ray.getDirection());
-        //var ray_trans = surfaces[k].transformRay(ray);
-        
-        //Intersezione con l'oggetto corrente
-        var ray_trans = new Ray(ray_a_trans, ray_dir_trans);
-        t = surfaces[k].intersects(ray_trans);
-        // if (t <= T_MINIMO || t >= T_MASSIMO) t = false;
-
-        //Ricorda l'oggetto intersecato che si trova più vicino alla camera 
-        //per calcolare il colore del pixel
-        if (t != false && (t_min == false ||  t <= t_min)) {
-           //TODO: Sostituire le tre variabili con oggetto Intersection
-          t_min = t;
-          k_min = k;
-          ray_min = ray_trans; //per non ricalcolarlo più tardi
-          // if (test < 30 && t_min < 0) console.log("surf: "+surfaces[k]+"tmin:"+t_min);
-        }
-      }
-        
-      if (t_min == false) setPixel(i, j, backgroundcolor);
-      else {
-        //* SHADING
-        ray_trans = ray_min;
-        //Applico le trasformazioni a pto intersecato e normale
-        point = ray_trans.pointAt(t_min);
-        var point_trans = surfaces[k_min].preM_point(point);
-        
-        n = surfaces[k_min].getNormal(point);
-        // if (i > 200 && i < 220 && j > 100 && j < 120) {console.log(n); setPixel(i, j, [0, 255, 0]);}
-        var n_trans = Vector3.normalize([], surfaces[k_min].preM_normal(n));
-
-        //Invocazione shader
-        color = surfaces[k_min].shade(ray_trans, point_trans, n_trans, scene.bounce_depth);
-          
-        setPixel(i, j, color);
-      }
-
+      color = hit(ray);
+      setPixel(i, j, color);
     }
   }
 
@@ -693,6 +657,48 @@ function render() {
   $('#log').html("rendered in: "+(end-start)+"ms");
   console.log("rendered in: "+(end-start)+"ms");
 
+}
+
+function hit(ray) {
+  //Calcola l'intersezione raggio-scena
+  var t_min = false; var k_min = 0, ray_min = null;     
+  for (var k = 0; k < surfaces.length; k++) {
+    //trasforma il raggio per rispettare le trasformazioni della superficie corrente
+    var ray_a_trans = surfaces[k].preM_inv_point(ray.getOrigin());
+    var ray_dir_trans = surfaces[k].preM_inv_dir(ray.getDirection());
+    //var ray_trans = surfaces[k].transformRay(ray);
+    
+    //Intersezione con l'oggetto corrente
+    var ray_trans = new Ray(ray_a_trans, ray_dir_trans);
+    var t = surfaces[k].intersects(ray_trans);
+    if (t <= T_MINIMO || t >= T_MASSIMO || t < EPSILON) t = false;
+
+    //Ricorda l'oggetto intersecato che si trova più vicino alla camera 
+    //per calcolare il colore del pixel
+    if (t != false && (t_min == false ||  t <= t_min)) {
+       //TODO: Sostituire le tre variabili con oggetto Intersection
+      t_min = t;
+      k_min = k;
+      var ray_min = ray_trans; //per non ricalcolarlo più tardi
+      // if (test < 30 && t_min < 0) console.log("surf: "+surfaces[k]+"tmin:"+t_min);
+    }
+  }
+    
+  if (t_min == false) return backgroundcolor;
+  else {
+    //* SHADING
+    ray_trans = ray_min;
+    //Applico le trasformazioni a pto intersecato e normale
+    var point = ray_trans.pointAt(t_min);
+    var point_trans = surfaces[k_min].preM_point(point);
+    
+    var n = surfaces[k_min].getNormal(point);
+    // if (i > 200 && i < 220 && j > 100 && j < 120) {console.log(n); setPixel(i, j, [0, 255, 0]);}
+    var n_trans = Vector3.normalize([], surfaces[k_min].preM_normal(n));
+
+    //Invocazione shader
+    return surfaces[k_min].shade(ray_trans, point_trans, n_trans);
+  }
 }
 
 //sets the pixel at the given x,y to the given color

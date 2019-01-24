@@ -15,33 +15,36 @@
 		<canvas id="canvas" width="512"  height="512" style="border: 1 solid black">
 			If you see this, your browser doesn't support HTML5 canvas elements!
 		</canvas>
+		<img id="example" idth="512" height="512" style="border: 1 solid black" hidden>
 	</div>
 	<div>
 		<p>
 			Scene: <code>assets/</code>
 			<!-- <input type="select" list=assets_list id="scene_file_input">
-			<datalist id="assets_list">
-			</datalist> -->
-			<select id="scene_file_input">
-				<option value="SphereTest">SphereTest</option>
+				<datalist id="assets_list">
+				</datalist> -->
+				<select id="scene_file_input">
+					<option value="SphereTest">SphereTest</option>
 					<option value="TriangleTest">TriangleTest</option>
 					<option value="SphereShadingTest1">SphereShadingTest1</option>
 					<option value="SphereShadingTest2">SphereShadingTest2</option>
 					<option value="TriangleShadingTest">TriangleShadingTest</option>
-					<option value="TransformationTest" selected>TransformationTest</option>
+					<option selected value="TransformationTest">TransformationTest</option>
 					<option value="ShadowTest1">ShadowTest1</option>
 					<option value="ShadowTest2">ShadowTest2</option>
 					<option value="RecursiveTest">RecursiveTest</option>
 					<option value="CornellBox">CornellBox</option>
 					<option value="FullTest">FullTest</option>
-			</select>
-			<code>.json</code>
-			<span style="padding-left:1em">&nbsp;</span> 
-			<button id="load_scene_button">Load Scene</button>
-		</p>
-	</div>
-	<div>
-		<p id="log"></p>
-	</div>
-</body>
-</html>
+				</select>
+				<code>.json</code>
+				<span style="padding-left:1em">&nbsp;</span> 
+				<button id="load_scene_button">Load Scene</button>
+				<button id="example_button">Toggle Example</button>
+			</p>
+		</div>
+		<div>
+			<p id="test" style="color:red; font-size: 16px; " hidden>TEST</p>
+			<p id="log"></p>
+		</div>
+	</body>
+	</html>

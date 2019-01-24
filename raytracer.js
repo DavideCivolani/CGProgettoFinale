@@ -172,11 +172,14 @@ class Surface { // così modifichiamo uno shader unico per tutto
         
         //Ombre
         var l = Vector3.scale([],light.getDirection(point), -1); //prende la direzione giusta a seconda del tipo di luce
-        var shadowRay = new Ray(point,l);
+        var biaspoint = Vector3.scale([],n,scene.shadow_bias);
+        biaspoint = Vector3.add([],point,biaspoint); //aggiunge il bias in direzione della normale per evitare di peggiorare l'errore
+
+        var shadowRay = new Ray(biaspoint,l);
         var ts = false;
         for (k=0; !ts && k < surfaces.length; k++) {
           ts = surfaces[k].intersects(shadowRay);
-          if (ts < scene.shadow_bias) ts = false; //evita che shadowRay intersechi la superficie da cui parte
+          if (ts < EPSILON) ts = false;           
           //if (test < 10) console.log(ts);
         }
 
@@ -232,7 +235,7 @@ class Surface { // così modifichiamo uno shader unico per tutto
             //Componente RIFLESSA
             bounce = bounce-1;
             //verifico se il raggio riflesso colpisce un altro oggetto
-            var mirrorRay = new Ray(point, r);
+            var mirrorRay = new Ray(biaspoint, r);
             var tmirror = false;
             for (k=0; !tmirror && k<surfaces.length; k++) {
               tmirror = surfaces[k].intersects(mirrorRay);
@@ -258,7 +261,7 @@ class Surface { // così modifichiamo uno shader unico per tutto
     return color;
   }
 
-  transformRay(ray) {
+  transformRay(ray) { //NOTA: non più utilizzata
      //Allineo il raggio al SdR trasformato
      var temp;
      /* temp = Matrix4.fromValues(
@@ -283,6 +286,13 @@ class Surface { // così modifichiamo uno shader unico per tutto
  
      //if (test < 1) {console.log(ray_e, ray_d); test++;}
      return new Ray(ray_e, ray_d);
+  }
+
+  transformNormal(normal) { //NOTA: non più utilizzata
+    var temp;
+    temp = Vector4.fromValues(normal[0],normal[1],normal[2],0);
+    temp = Matrix4.multiply([], this.M_norm, temp);
+    return Vector3.fromValues(temp[0], temp[1], temp[2]);
   }
 }
 
@@ -425,7 +435,14 @@ class Triangle extends Surface {
     else return false;
   }
 
-  getNormal(point) {return this.normal;}
+  getNormal(point) {
+    return this.getNormal();
+  }
+
+  getNormal() {
+    //return Vector3.scale([], this.normal, -1); //TEST inverte direzione normale
+    return this.normal;
+  }
 
 }
 
@@ -630,6 +647,7 @@ function render() {
         //trasforma il raggio per rispettare le trasformazioni della superficie corrente
         var ray_a_trans = surfaces[k].preM_inv_point(ray.getOrigin());
         var ray_dir_trans = surfaces[k].preM_inv_dir(ray.getDirection());
+        //var ray_trans = surfaces[k].transformRay(ray);
         
         //Intersezione con l'oggetto corrente
         var ray_trans = new Ray(ray_a_trans, ray_dir_trans);

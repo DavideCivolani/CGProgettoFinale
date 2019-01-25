@@ -15,9 +15,6 @@ var canvas;
 var context;
 var imageBuffer;
 var aspect;
-var heigth;
-var width;
-
 var DEBUG = false; //whether to show debug messages
 var EPSILON = 0.00001; //error margins
 var T_MINIMO = 0.1;
@@ -30,14 +27,14 @@ var camera;
 var surfaces = [];
 var lights = [];
 // var materials = [];
-
-var bounce = 0;
+var shadow_bias;
+var bounce_depth;
 
 //etc...
 
 //CLASSES PROTOTYPES
 class Camera {
-  constructor(eye,up,at) {
+  constructor(eye,up,at,fovy) {
     this.eye = Vector3.fromValues(eye[0],eye[1],eye[2]); // Posizione della camera    (e)
     this.up = Vector3.fromValues(up[0],up[1],up[2]);     // Inclinazione testa        (t)
     this.at = Vector3.fromValues(at[0],at[1],at[2]);     // Punto verso cui guardo    (?) 
@@ -51,6 +48,7 @@ class Camera {
     this.v = Vector3.cross([], this.w, this.u); //w * u;
 
     // console.log(this.w, this.u, this.v);
+    this.fovy = fovy;
   }
 
   //makeViewMatrix() { ... }
@@ -149,8 +147,9 @@ class Surface { // così modifichiamo uno shader unico per tutto
   }
 
 
-  shade(ray, point, n) {
+  shade(ray, point, n, bounce) {
     var color = Vector3.create();
+    var reflective = (this.material.kr[0]+this.material.kr[1]+this.material.kr[2]) > EPSILON;
     var k = 0;
 
     //Calcolo il vettore vista (lo faccio qui perchè tanto non cambia rispetto alle luci)
@@ -175,7 +174,7 @@ class Surface { // così modifichiamo uno shader unico per tutto
         
         //Ombre
         var l = Vector3.scale([],light.getDirection(point), -1); //prende la direzione giusta a seconda del tipo di luce
-        var biaspoint = Vector3.scale([],n,scene.shadow_bias);
+        var biaspoint = Vector3.scale([],n,shadow_bias);
         biaspoint = Vector3.add([],point,biaspoint); //aggiunge il bias in direzione della normale per evitare di peggiorare l'errore
 
         var shadowRay = new Ray(biaspoint,l);
@@ -242,12 +241,14 @@ class Surface { // così modifichiamo uno shader unico per tutto
           //if (test < 1) { console.log(this.material.ks); test++; }
           Vector3.add(color, color, specular);
 
-          if (bounce <= scene.bounce_depth) {
+          //Componente Riflessione Specchio
+          if (reflective && //non iniziare la ricorsione se il materiale è completamente opaco
+            bounce <= bounce_depth) {
             bounce++;
 
-            var ray = new Ray(point, r2);
+            var ray = new Ray(point, r2,bounce);
 
-            var reflex_color = hit(ray);
+            var reflex_color = hit(ray,bounce);
             reflex[0] = this.material.kr[0] * reflex_color[0];
             reflex[1] = this.material.kr[1] * reflex_color[1];
             reflex[2] = this.material.kr[2] * reflex_color[2];
@@ -546,13 +547,11 @@ function init() {
 //loads and "parses" the scene file at the given path
 function loadSceneFile(filepath) {
   scene = Utils.loadJSON(filepath); //load the scene
-  heigth = 2*Math.tan(rad(scene.camera.fovy/2.0));
-  width = heigth * aspect;
   // console.log(scene.camera); //loading is ok
-
+  
   //set up camera
   aspect = scene.camera.aspect;
-  camera = new Camera(scene.camera.eye, scene.camera.up, scene.camera.at);
+  camera = new Camera(scene.camera.eye, scene.camera.up, scene.camera.at, scene.camera.fovy);
   // camera.makeViewMatrix(); //a che serve?
 
   //set up surfaces
@@ -593,6 +592,10 @@ function loadSceneFile(filepath) {
 
     //console.log(surfaces[i]);
 
+    //Set up other
+    shadow_bias = scene.shadow_bias;
+    bounce_depth = scene.bounce_depth;
+
   }
 
   //set up lights
@@ -628,24 +631,24 @@ function loadSceneFile(filepath) {
 
 
 function render() {
-  var h,w,u,v;
+  var height,width,u,v,bounce;
   //backgroundcolor = [0, 1, 0.2]; //TEST contrasto superfici nere
   var start = Date.now(); //for logging
-
-  h = 2*Math.tan(rad(scene.camera.fovy/2.0));
-  w = h * aspect;
+  
+  height = 2*Math.tan(rad(camera.fovy/2.0));
+  width = height * aspect;
 
   var ray, color;
   for (var j = 0; j <= canvas.height; j++) { //indice bordo sinistro se i=0 (bordo destro se i = nx-1)
     for (var i = 0; i <= canvas.width;  i++) {
       bounce = 0;
-      u = (w*i/(canvas.width-1)) - w/2.0;
-      v = (-h*j/(canvas.height-1)) + h/2.0;
+      u = (width*i/(canvas.width-1)) - width/2.0;
+      v = (-height*j/(canvas.height-1)) + height/2.0;
       
       //fire a ray though each pixel
       var ray = camera.castRay(u, v);
 
-      color = hit(ray);
+      color = hit(ray,bounce);
       setPixel(i, j, color);
     }
   }
@@ -659,7 +662,7 @@ function render() {
 
 }
 
-function hit(ray) {
+function hit(ray,bounce) {
   //Calcola l'intersezione raggio-scena
   var t_min = false; var k_min = 0, ray_min = null;     
   for (var k = 0; k < surfaces.length; k++) {
@@ -697,7 +700,7 @@ function hit(ray) {
     var n_trans = Vector3.normalize([], surfaces[k_min].preM_normal(n));
 
     //Invocazione shader
-    return surfaces[k_min].shade(ray_trans, point_trans, n_trans);
+    return surfaces[k_min].shade(ray_trans, point_trans, n_trans, bounce);
   }
 }
 
@@ -748,7 +751,7 @@ $(document).ready(function(){
      var y = e.pageY - $('#canvas').offset().top;
      DEBUG = true;
      var u = (width*x/(canvas.width-1)) - width/2.0;
-     var v = (-heigth*y/(canvas.height-1)) + heigth/2.0;
+     var v = (-height*y/(canvas.height-1)) + height/2.0;
     
      var ray = camera.castRay(u,v); cast a ray through the point
      for (var obj in surfaces) surfaces[obj].intersects(ray);

@@ -15,7 +15,7 @@ var canvas;
 var context;
 var imageBuffer;
 var aspect;
-var heigth;
+var height;
 var width;
 
 var DEBUG = false; //whether to show debug messages
@@ -32,12 +32,14 @@ var lights = [];
 // var materials = [];
 
 var bounce = 0;
+var shadow_bias;
+var bounce_depth;
 
 //etc...
 
 //CLASSES PROTOTYPES
 class Camera {
-  constructor(eye,up,at) {
+  constructor(eye,up,at,fovy) {
     this.eye = Vector3.fromValues(eye[0],eye[1],eye[2]); // Posizione della camera    (e)
     this.up = Vector3.fromValues(up[0],up[1],up[2]);     // Inclinazione testa        (t)
     this.at = Vector3.fromValues(at[0],at[1],at[2]);     // Punto verso cui guardo    (?) 
@@ -51,6 +53,7 @@ class Camera {
     this.v = Vector3.cross([], this.w, this.u); //w * u;
 
     // console.log(this.w, this.u, this.v);
+    this.fovy = fovy;
   }
 
   //makeViewMatrix() { ... }
@@ -63,7 +66,7 @@ class Camera {
     dir[1] = - d * this.w[1] + u * this.u[1] + v * this.v[1];
     dir[2] = - d * this.w[2] + u * this.u[2] + v * this.v[2];
 
-    var r = new Ray(this.eye, dir);
+    var r = new Ray(this.eye, dir, T_MASSIMO);
     // if (DEBUG) console.log("dir:"+dir);
     return r;
     
@@ -153,6 +156,7 @@ class Surface { // così modifichiamo uno shader unico per tutto
   shade(ray, point, n) {
     var color = Vector3.create();
     var k = 0;
+    var reflective = (this.material.kr[0]+this.material.kr[1]+this.material.kr[2]) > 0;
 
     // if (DEBUG) console.log("p: ", point);
 
@@ -174,16 +178,16 @@ class Surface { // così modifichiamo uno shader unico per tutto
         ambient = Vector3.multiply([], this.material.ka, light.color);
         Vector3.add(color, color, ambient);
       }
-      else { //Luci Direzionali e Puntiformi (lee luci ambientali non influenzano comp. diffusa e speculare)
-        
+      else { //Luci Direzionali e Puntiformi (le luci ambientali non influenzano comp. diffusa e speculare)
+
         //Ombre
         var l = Vector3.normalize([], Vector3.scale([],light.getDirection(point), -1)); //prende la direzione giusta a seconda del tipo di luce
         // if (scene.lights[i].source == "Point")
         //   var l = Vector3.normalize([], Vector3.subtract([], scene.lights[i].position, point));
         // else if (scene.lights[i].source == "Directional")
         //   var l = Vector3.normalize([], Vector3.scale([], scene.lights[i].direction));
-        var biaspoint = Vector3.scale([],l,scene.shadow_bias);
-        biaspoint = Vector3.add([],point,biaspoint); //aggiunge il bias in direzione della normale per evitare di peggiorare l'errore
+        var biaspoint = Vector3.scale([],n,scene.shadow_bias); //aggiunge il bias in direzione della normale per evitare di peggiorare l'errore
+        biaspoint = Vector3.add([],point,biaspoint); 
 
         //calcola il vettore riflesso r rispetto alla luce
         var lDotn = Vector3.dot(l, n); //coseno dell'angolo tra normale e raggio di luce!
@@ -210,25 +214,24 @@ class Surface { // così modifichiamo uno shader unico per tutto
         r_v[2] = 2 * nDotv * n[2] - v[2];
         r_v = Vector3.normalize([], r_v);
 
-        // ombra
-        var shadowRay = new Ray(biaspoint,l);
+        // intersezioni per ombra
+        var shadowRay = new Ray(biaspoint,l, Vector3.distance(biaspoint, l));
         var ts = false;
-        var k = 0;
-        while(ts == false && k < surfaces.length) {
-          if (k != this.k) {
-            var shadowRay_a_trans = surfaces[k].preM_inv_point(shadowRay.getOrigin());
+        for(var k = 0; ts == false && k < surfaces.length; k++) {
+          //if (k != this.k) {
+            /* var shadowRay_a_trans = surfaces[k].preM_inv_point(shadowRay.getOrigin());
             var shadowRay_dir_trans = surfaces[k].preM_inv_dir(shadowRay.getDirection());
-            var shadowRay_trans = new Ray(shadowRay_a_trans, shadowRay_dir_trans);
+            var shadowRay_trans = new Ray(shadowRay_a_trans, shadowRay_dir_trans); */
+            var shadowRay_trans = surfaces[k].transformRay(shadowRay);
             ts = surfaces[k].intersects(shadowRay_trans);
-            if (ts < EPSILON || ts >= Vector3.distance(biaspoint, l)) ts = false;
+            if (ts >= Vector3.distance(biaspoint, l)) ts = false; //impedisce al raggio-ombra di andare oltre la luce
 
             if (DEBUG) console.log(this.k, k, ts);
-          }
-          k++;
+          //}
         }
 
         if (ts == false) { //se l'oggetto non è in ombra, calcola illuminazione completa
-          //Componente Diffusa
+          //* Componente Diffusa
           // if (test < 100000 && nDotL > 0) {console.log(this.material.ka[0], this.material.ka[1], this.material.ka[2]); test++;}
           var nDotL = Vector3.dot(n, l);
           nDotL = Math.max(nDotL, 0.0);
@@ -239,8 +242,8 @@ class Surface { // così modifichiamo uno shader unico per tutto
 
           Vector3.add(color, color, diffuse);
         
-          //Componente Speculare (metodo Phong per Ray-Tracing, Lezione 24, slide 34)
-          
+          //* Componente Speculare (metodo Phong per Ray-Tracing, Lezione 24, slide 34)
+
           //calcola intensità lobo di luce
           if (bounce == 0)
             var vDotr = Math.max(Vector3.dot(v, r_l), 0.0);
@@ -274,10 +277,10 @@ class Surface { // così modifichiamo uno shader unico per tutto
         }
 
         // riflesso
-        if (bounce < scene.bounce_depth && this.material.kr != 0) {
+        if (bounce < bounce_depth && reflective) {
           bounce++;
 
-          var reflex_ray = new Ray(point, r_d);
+          var reflex_ray = new Ray(point, r_d, T_MASSIMO);
 
           var reflex_color = hit(reflex_ray);
           reflex[0] = this.material.kr[0] * reflex_color[0];
@@ -294,31 +297,20 @@ class Surface { // così modifichiamo uno shader unico per tutto
     return color;
   }
 
-  transformRay(ray) { //NOTA: non più utilizzata
+  transformRay(ray) {
      //Allineo il raggio al SdR trasformato
      var temp;
-     /* temp = Matrix4.fromValues(
-       ray.a[0], 0, 0, 0,
-       ray.a[1], 0, 0, 0,
-       ray.a[2], 0, 0, 0,
-       1,        0, 0, 0
-     ); */
+
      temp = Vector4.fromValues(ray.a[0],ray.a[1],ray.a[2],1);
      temp = Matrix4.multiply([], this.M_inv, temp);
      var ray_e = Vector3.fromValues(temp[0], temp[1], temp[2]); //origine "trasformata"
-     
-     /* temp = Matrix4.fromValues(
-       ray.dir[0], 0, 0, 0,
-       ray.dir[1], 0, 0, 0,
-       ray.dir[2], 0, 0, 0,
-       0,          0, 0, 0
-     ); */
+
      temp = Vector4.fromValues(ray.dir[0],ray.dir[1],ray.dir[2],0);
      temp = Matrix4.multiply([], this.M_inv, temp);
      var ray_d = Vector3.fromValues(temp[0], temp[1], temp[2]); //direzione "trasformata"
  
      //if (test < 1) {console.log(ray_e, ray_d); test++;}
-     return new Ray(ray_e, ray_d);
+     return new Ray(ray_e, ray_d, ray.tmax);
   }
 
   transformNormal(normal) { //NOTA: non più utilizzata
@@ -342,45 +334,35 @@ class Sphere extends Surface {
     var ray_d = ray.getDirection();
 
     //Metodo analitico (Lezione 24, slide 14)
-    var e_c = Vector3.subtract([], ray_e, this.center); //e - c
+    var p = Vector3.subtract([], ray_e, this.center); //e - c
     var d = ray_d;
+    //console.log("p: "+p+"; d: "+d);
     
-    var dDote_c = Vector3.dot(d,e_c);
-    var dDotd = Vector3.dot(d, d);
-    var e_cDote_c = Vector3.dot(e_c, e_c);
-
-    var e_cDotd = Vector3.dot(e_c, d);
+    var ddotp = Vector3.dot(d,p);
+    if (DEBUG) console.log("d⋅p:"+ddotp);
+    var psquare = Vector3.dot(p, p);
+    if (DEBUG) console.log("p⋅p: "+psquare);
+    var dsquare = Vector3.dot(d, d);
+    if (DEBUG) console.log("d⋅d"+dsquare);
     
-    // libro
-    var delta = dDote_c*dDote_c - dDotd*(e_cDote_c - this.radius*this.radius);
+    var delta = ddotp*ddotp - dsquare*(psquare - this.radius*this.radius);
+    if (DEBUG) console.log("delta: "+delta);
 
-    // prof
-    // var delta = e_cDotd*e_cDotd - e_cDote_c + this.radius*this.radius;
-    if (delta > 0) {
-      // libro
-      var t1 = (-dDote_c + Math.sqrt(delta)) / dDotd;
-      var t2 = (-dDote_c - Math.sqrt(delta)) / dDotd;
+    
+    if (delta >= 0) {
+      var t1 = (-ddotp - Math.sqrt(delta)) / dsquare; //più vicino se t1 && t2 > 0
+      var t2 = (-ddotp + Math.sqrt(delta)) / dsquare; 
 
-      // prof
-      // var t1 = -e_cDotd + Math.sqrt(delta);
-      // var t2 = -e_cDotd - Math.sqrt(delta);
+      //Validazione tmin tmax
+      if (t1 < T_MINIMO || t1 > T_MASSIMO) t1 = -1;
+      if (t2 < T_MINIMO || t2 > T_MASSIMO) t2 = -1;
 
-      if (t1 > 0 && t1 < t2) return t1;
-      else
-        if (t2 > 0 && t2 < t1) return t2;
+      //Quale dei due usiamo??
+      if (t1 > EPSILON) return t1;
+      if (t2 > EPSILON) return t2; //la camera è dentro la sfera!
       else return false //sfera dietro alla camera: non la disegno
-    }
-    else if (delta == 0) {
-      // libro
-      var t = (-dDote_c) / dDotd;
-
-      // prof
-      // var t = -e_cDotd;
-
-      if (t > 0) return t;
-      else return false;
-    }
-    else if (delta < 0) return false;
+    } 
+    else return false;
   }
   
   getNormal(point) {
@@ -436,7 +418,6 @@ class Triangle extends Surface {
   }
 
   intersects(ray) {
-
     var A = Matrix3.fromValues(
       this.a[0]-this.b[0], this.a[0]-this.c[0], ray.dir[0],
       this.a[1]-this.b[1], this.a[1]-this.c[1], ray.dir[1],
@@ -476,7 +457,10 @@ class Triangle extends Surface {
     // cramer
     if (beta > 0 && gamma > 0 && beta+gamma < 1) { // intersezione
       //console.log("ok:"+t);
-      return t;
+
+      //Validazione tmin tmax
+      if (t > EPSILON && t >= T_MINIMO && t <= T_MASSIMO) return t;
+      else return false;
     }
     else return false;
   }
@@ -494,9 +478,10 @@ class Triangle extends Surface {
 
 //Ray-Intersect
 class Ray {
-  constructor(a,dir) {
+  constructor(a,dir,tmax) {
     this.a = a; //origine
     this.dir = Vector3.normalize([],dir); //direzione
+    this.tmax = tmax; //max valore per cui il raggio è valido
   }
   
   pointAt(t) {
@@ -587,15 +572,28 @@ function init() {
 //loads and "parses" the scene file at the given path
 function loadSceneFile(filepath) {
   scene = Utils.loadJSON(filepath); //load the scene
-  heigth = 2*Math.tan(rad(scene.camera.fovy/2.0));
-  width = heigth * aspect;
   // console.log(scene.camera); //loading is ok
 
   //set up camera
   aspect = scene.camera.aspect;
-  camera = new Camera(scene.camera.eye, scene.camera.up, scene.camera.at);
+  camera = new Camera(scene.camera.eye, scene.camera.up, scene.camera.at, scene.camera.fovy);
   // camera.makeViewMatrix(); //a che serve?
 
+  //set up lights
+  lights = [];
+  for (var i = 0; i < scene.lights.length; i++) {
+    var light = scene.lights[i];
+    if (light.source == "Ambient") {
+      lights.push(new AmbientLight(light.color));
+    }
+    else if (light.source == "Point")  {
+      lights.push(new PointLight(light.color, light.position));
+    }
+    else if (light.source == "Directional") {
+      lights.push(new DirectionalLight(light.color, light.direction));
+    }
+  }
+ 
   //set up surfaces
   surfaces = [];
   for (var i = 0; i < scene.surfaces.length; i++) {
@@ -636,25 +634,16 @@ function loadSceneFile(filepath) {
 
   }
 
-  //set up lights
-  lights = [];
-  for (var i = 0; i < scene.lights.length; i++) {
-    var light = scene.lights[i];
-    if (light.source == "Ambient") {
-      lights.push(new AmbientLight(light.color));
-    }
-    else if (light.source == "Point")  {
-      lights.push(new PointLight(light.color, light.position));
-    }
-    else if (light.source == "Directional") {
-      lights.push(new DirectionalLight(light.color, light.direction));
-    }
-  }
-
   // materials = [];
   // for (var i = 0; i < scene.materials.length; i++) {
   //   materials.push(new Material(scene.materials[i].ka, scene.materials[i].kd, scene.materials[i].ks, scene.materials[i].shininess));
   // }
+
+  //altri parametri
+  height = 2*Math.tan(rad(camera.fovy/2.0));
+  width = height * aspect;
+  shadow_bias = scene.shadow_bias;
+  bounce_depth = scene.bounce_depth;
 
   //TEST - Carica immagine comparativa
   var testname = 'examples/'+$('#scene_file_input').val()+'.png'
@@ -669,19 +658,15 @@ function loadSceneFile(filepath) {
 
 
 function render() {
-  var h,w,u,v;
+  var u,v,ray,color;
   //backgroundcolor = [0, 1, 0.2]; //TEST contrasto superfici nere
   var start = Date.now(); //for logging
 
-  h = 2*Math.tan(rad(scene.camera.fovy/2.0));
-  w = h * aspect;
-
-  var ray, color;
   for (var j = 0; j <= canvas.height; j++) { //indice bordo sinistro se i=0 (bordo destro se i = nx-1)
     for (var i = 0; i <= canvas.width;  i++) {
       bounce = 0;
-      u = (w*i/(canvas.width-1)) - w/2.0;
-      v = (-h*j/(canvas.height-1)) + h/2.0;
+      u = (width*i/(canvas.width-1)) - width/2.0;
+      v = (-height*j/(canvas.height-1)) + height/2.0;
       
 
       //fire a ray though each pixel
@@ -711,14 +696,14 @@ function hit(ray) {
   var t_min = false; var k_min = 0, ray_min = null;     
   for (var k = 0; k < surfaces.length; k++) {
     //trasforma il raggio per rispettare le trasformazioni della superficie corrente
-    var ray_a_trans = surfaces[k].preM_inv_point(ray.getOrigin());
+    /* var ray_a_trans = surfaces[k].preM_inv_point(ray.getOrigin());
     var ray_dir_trans = surfaces[k].preM_inv_dir(ray.getDirection());
-    //var ray_trans = surfaces[k].transformRay(ray);
+    var ray_trans = new Ray(ray_a_trans, ray_dir_trans, ray.tmax); */
     
     //Intersezione con l'oggetto corrente
-    var ray_trans = new Ray(ray_a_trans, ray_dir_trans);
+    var ray_trans = surfaces[k].transformRay(ray);
     var t = surfaces[k].intersects(ray_trans);
-    if (t <= T_MINIMO || t >= T_MASSIMO || t < EPSILON) t = false;
+    //if (t <= T_MINIMO || t >= T_MASSIMO || t < EPSILON) t = false; //validazione generale in intersect
 
     //Ricorda l'oggetto intersecato che si trova più vicino alla camera 
     //per calcolare il colore del pixel
@@ -800,14 +785,11 @@ $(document).ready(function(){
      //backgroundcolor = [0, 1, 0.2]; //TEST contrasto superfici nere
      var start = Date.now(); //for logging
    
-     h = 2*Math.tan(rad(scene.camera.fovy/2.0));
-     w = h * aspect;
-   
      var ray, color;
 
      bounce = 0;
-      u = (w*x/(canvas.width-1)) - w/2.0;
-      v = (-h*y/(canvas.height-1)) + h/2.0;
+     /* u = (width*i/(canvas.width-1)) - width/2.0;
+     v = (-height*j/(canvas.height-1)) + height/2.0; */
       
 
       //fire a ray though each pixel

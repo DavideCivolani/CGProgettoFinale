@@ -243,7 +243,6 @@ class Surface { // così modifichiamo uno shader unico per tutto
           Vector3.add(color, color, diffuse);
         
           //* Componente Speculare (metodo Phong per Ray-Tracing, Lezione 24, slide 34)
-
           //calcola intensità lobo di luce
           if (bounce == 0)
             var vDotr = Math.max(Vector3.dot(v, r_l), 0.0);
@@ -276,7 +275,7 @@ class Surface { // così modifichiamo uno shader unico per tutto
           Vector3.add(color, color, specular);
         }
 
-        // riflesso
+        // Componente Riflessione a Specchio
         if (bounce < bounce_depth && reflective) {
           bounce++;
 
@@ -354,8 +353,8 @@ class Sphere extends Surface {
       var t2 = (-ddotp + Math.sqrt(delta)) / dsquare; 
 
       //Validazione tmin tmax
-      if (t1 < T_MINIMO || t1 > T_MASSIMO) t1 = -1;
-      if (t2 < T_MINIMO || t2 > T_MASSIMO) t2 = -1;
+      if (t1 < T_MINIMO || t1 > ray.tmax) t1 = false; //nota: per js false == 0
+      if (t2 < T_MINIMO || t2 > ray.tmax) t2 = false;
 
       //Quale dei due usiamo??
       if (t1 > EPSILON) return t1;
@@ -459,7 +458,7 @@ class Triangle extends Surface {
       //console.log("ok:"+t);
 
       //Validazione tmin tmax
-      if (t > EPSILON && t >= T_MINIMO && t <= T_MASSIMO) return t;
+      if (t > EPSILON && t >= T_MINIMO && t <= ray.tmax) return t;
       else return false;
     }
     else return false;
@@ -481,7 +480,7 @@ class Ray {
   constructor(a,dir,tmax) {
     this.a = a; //origine
     this.dir = Vector3.normalize([],dir); //direzione
-    this.tmax = tmax; //max valore per cui il raggio è valido
+    this.tmax = tmax; //max valore per cui il raggio è valido (TEST)
   }
   
   pointAt(t) {

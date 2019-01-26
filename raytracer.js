@@ -185,13 +185,43 @@ class Surface { // così modifichiamo uno shader unico per tutto
         var biaspoint = Vector3.scale([],l,scene.shadow_bias);
         biaspoint = Vector3.add([],point,biaspoint); //aggiunge il bias in direzione della normale per evitare di peggiorare l'errore
 
+        //calcola il vettore riflesso r rispetto alla luce
+        var lDotn = Vector3.dot(l, n); //coseno dell'angolo tra normale e raggio di luce!
+        var r_l = Vector3.create();
+        r_l[0] = 2 * lDotn * n[0] - l[0];
+        r_l[1] = 2 * lDotn * n[1] - l[1];
+        r_l[2] = 2 * lDotn * n[2] - l[2];
+        r_l = Vector3.normalize([], r_l);
+
+        // r rispetto alla direzione del raggio
+        var dDotn = Vector3.dot(ray.getDirection(), n);
+        var norm_dir = Vector3.normalize([], ray.getDirection());
+        var r_d = Vector3.create();
+        r_d[0] = norm_dir[0] - 2 * (dDotn) * n[0];
+        r_d[1] = norm_dir[1] - 2 * (dDotn) * n[1];
+        r_d[2] = norm_dir[2] - 2 * (dDotn) * n[2];
+        r_d = Vector3.normalize([], r_d);
+
+        // r rispetto alla vista
+        var nDotv = Vector3.dot(n, v); //coseno dell'angolo tra normale e raggio di luce!
+        var r_v = Vector3.create();
+        r_v[0] = 2 * nDotv * n[0] - v[0];
+        r_v[1] = 2 * nDotv * n[1] - v[1];
+        r_v[2] = 2 * nDotv * n[2] - v[2];
+        r_v = Vector3.normalize([], r_v);
+
+        // ombra
         var shadowRay = new Ray(biaspoint,l);
         var ts = false;
         var k = 0;
         while(ts == false && k < surfaces.length) {
           if (k != this.k) {
-            ts = surfaces[k].intersects(shadowRay);
-            if (ts <= T_MINIMO || ts >= T_MASSIMO || ts < EPSILON || ts >= Vector3.distance(biaspoint, l)) ts = false;
+            var shadowRay_a_trans = surfaces[k].preM_inv_point(shadowRay.getOrigin());
+            var shadowRay_dir_trans = surfaces[k].preM_inv_dir(shadowRay.getDirection());
+            var shadowRay_trans = new Ray(shadowRay_a_trans, shadowRay_dir_trans);
+            ts = surfaces[k].intersects(shadowRay_trans);
+            if (ts < EPSILON || ts >= Vector3.distance(biaspoint, l)) ts = false;
+
             if (DEBUG) console.log(this.k, k, ts);
           }
           k++;
@@ -199,8 +229,8 @@ class Surface { // così modifichiamo uno shader unico per tutto
 
         if (ts == false) { //se l'oggetto non è in ombra, calcola illuminazione completa
           //Componente Diffusa
-          var nDotL = Vector3.dot(n, l); //coseno dell'angolo tra normale e raggio di luce!
           // if (test < 100000 && nDotL > 0) {console.log(this.material.ka[0], this.material.ka[1], this.material.ka[2]); test++;}
+          var nDotL = Vector3.dot(n, l);
           nDotL = Math.max(nDotL, 0.0);
           
           diffuse[0] = this.material.kd[0] * light.color[0] * nDotL;
@@ -210,24 +240,13 @@ class Surface { // così modifichiamo uno shader unico per tutto
           Vector3.add(color, color, diffuse);
         
           //Componente Speculare (metodo Phong per Ray-Tracing, Lezione 24, slide 34)
-          //calcola il vettore riflesso r
-          var r1 = Vector3.create();
-          r1[0] = 2*nDotL* n[0] - l[0];
-          r1[1] = 2*nDotL* n[1] - l[1];
-          r1[2] = 2*nDotL* n[2] - l[2];
-
-          var dDotn = Vector3.dot(ray.getDirection(), n);
-          var r2 = Vector3.create();
-          r2[0] = ray.getDirection()[0] - 2 * (dDotn) * n[0];
-          r2[1] = ray.getDirection()[1] - 2 * (dDotn) * n[1];
-          r2[2] = ray.getDirection()[2] - 2 * (dDotn) * n[2];
           
           //calcola intensità lobo di luce
           if (bounce == 0)
-            var RdotV = Math.max(0.0, Vector3.dot(r1,v));
+            var vDotr = Math.max(Vector3.dot(v, r_l), 0.0);
           else
-            var RdotV = Math.max(0.0, Vector3.dot(r2,v));
-          var shine = Math.pow(RdotV, this.material.shininess);
+            var vDotr = Math.max(Vector3.dot(Vector3.scale([], ray.getDirection(), -1), r_l), 0.0);
+          var shine = Math.max(Math.pow(vDotr, this.material.shininess), 0.0);
           
           //calcola riflesso
           specular[0] = light.color[0] * this.material.ks[0] * shine;
@@ -252,25 +271,24 @@ class Surface { // così modifichiamo uno shader unico per tutto
 
           //if (test < 1) { console.log(this.material.ks); test++; }
           Vector3.add(color, color, specular);
-
-          // riflesso
-          if (bounce <= scene.bounce_depth && this.material.kr != 0) {
-            bounce++;
-
-            var ray = new Ray(point, r2);
-
-            var reflex_color = hit(ray);
-            reflex[0] = this.material.kr[0] * reflex_color[0];
-            reflex[1] = this.material.kr[1] * reflex_color[1];
-            reflex[2] = this.material.kr[2] * reflex_color[2];
-
-            Vector3.add(color, color, reflex);
-            
-            // if (test < 10) {console.log(reflex_color); test++;}
-          }
-          
-
         }
+
+        // riflesso
+        if (bounce < scene.bounce_depth && this.material.kr != 0) {
+          bounce++;
+
+          var reflex_ray = new Ray(point, r_d);
+
+          var reflex_color = hit(reflex_ray);
+          reflex[0] = this.material.kr[0] * reflex_color[0];
+          reflex[1] = this.material.kr[1] * reflex_color[1];
+          reflex[2] = this.material.kr[2] * reflex_color[2];
+
+          Vector3.add(color, color, reflex);
+          
+          // if (test < 10) {console.log(scene.bounce_depth); test++;}
+        }
+
       }
     }
     return color;

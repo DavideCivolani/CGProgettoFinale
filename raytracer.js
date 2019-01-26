@@ -153,7 +153,7 @@ class Surface { // così modifichiamo uno shader unico per tutto
   shade(ray, point, n) {
     var color = Vector3.create();
     var k = 0;
-    var reflective = (this.material.kr[0]+this.material.kr[1]+this.material.kr[2]) > 0;
+    var reflective = this.material.hasOwnProperty("kr") && (this.material.kr[0]+this.material.kr[1]+this.material.kr[2]) > 0;
 
     // if (DEBUG) console.log("p: ", point);
 

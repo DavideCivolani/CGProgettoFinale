@@ -25,7 +25,6 @@ var T_MASSIMO = 10000;
 
 //scene to render
 var backgroundcolor = [0,0,0];
-var scene;
 var camera;
 var surfaces = [];
 var lights = [];
@@ -55,8 +54,6 @@ class Camera {
     // console.log(this.w, this.u, this.v);
     this.fovy = fovy;
   }
-
-  //makeViewMatrix() { ... }
 
   castRay(u, v) { //calcola il raggio che parte dalla camera e interseca il punto (x,y) nel rettangolo di vista
     //Calcolo la direzione del raggio.
@@ -166,7 +163,7 @@ class Surface { // così modifichiamo uno shader unico per tutto
     v = Vector3.normalize([], v);
 
     //Calcolo illuminazione
-    for (var i = 0; i < scene.lights.length; i++) {
+    for (var i = 0; i < lights.length; i++) {
       var light = lights[i];
       
       var ambient = Vector3.create();
@@ -174,7 +171,7 @@ class Surface { // così modifichiamo uno shader unico per tutto
       var specular = Vector3.create();
       var reflex = Vector3.create();
 
-      if (scene.lights[i].source == "Ambient") {
+      if (light.source() == "Ambient") {
         ambient = Vector3.multiply([], this.material.ka, light.color);
         Vector3.add(color, color, ambient);
       }
@@ -186,7 +183,7 @@ class Surface { // così modifichiamo uno shader unico per tutto
         //   var l = Vector3.normalize([], Vector3.subtract([], scene.lights[i].position, point));
         // else if (scene.lights[i].source == "Directional")
         //   var l = Vector3.normalize([], Vector3.scale([], scene.lights[i].direction));
-        var biaspoint = Vector3.scale([],n,scene.shadow_bias); //aggiunge il bias in direzione della normale per evitare di peggiorare l'errore
+        var biaspoint = Vector3.scale([],n,shadow_bias); //aggiunge il bias in direzione della normale per evitare di peggiorare l'errore
         biaspoint = Vector3.add([],point,biaspoint); 
 
         //calcola il vettore riflesso r rispetto alla luce
@@ -288,7 +285,7 @@ class Surface { // così modifichiamo uno shader unico per tutto
 
           Vector3.add(color, color, reflex);
           
-          // if (test < 10) {console.log(scene.bounce_depth); test++;}
+          // if (test < 10) {console.log(bounce_depth); test++;}
         }
 
       }
@@ -377,7 +374,7 @@ class Sphere extends Surface {
 class Triangle extends Surface {
   constructor(p1, p2, p3, material, transforms, k) {
     super(material, transforms, k);
-    // super(transforms);
+
     this.a = p1; // a
     this.b = p2; // b
     this.c = p3; // c
@@ -386,28 +383,27 @@ class Triangle extends Surface {
     var a_b = Vector3.subtract([], this.a, this.b);
     var b_a = Vector3.subtract([], this.b, this.a);
     var a_c = Vector3.subtract([], this.a, this.c);
-    this.normal_1 = Vector3.normalize([], Vector3.cross([], a_c, a_b));
-    this.normal_2 = Vector3.normalize([], Vector3.cross([], a_c, b_a));
+    var normal_1 = Vector3.normalize([], Vector3.cross([], a_c, a_b));
+    var normal_2 = Vector3.normalize([], Vector3.cross([], a_c, b_a));
     this.normal = Vector3.create();
 
-    for (var i = 0; i < scene.lights.length; i++) {
-      if (scene.lights[i].source != "Ambient") {
-        if (scene.lights[i].source == "Point") {
-          var light = scene.lights[i];
+    for (var i = 0; i < lights.length; i++) {
+      var light = lights[i];
+      if (light.source() != "Ambient") {
+        if (light.source() == "Point") {
           var direzione = Vector3.subtract([], light.position, this.a); // uso a come esempio ma dovrebbe funzionare con tutto
-        } else
-        if (scene.lights[i].source == "Directional") {
-          var light = scene.lights[i];
+        } 
+        else if (light.source() == "Directional") {
           var direzione = Vector3.create();
           direzione[0] = - light.direction[0];
           direzione[1] = - light.direction[1];
           direzione[2] = - light.direction[2];
         }
   
-          if ( Vector3.dot(direzione, this.normal_1) > 0 )
-            this.normal = this.normal_1;
-          else
-            this.normal = this.normal_2;
+        if ( Vector3.dot(direzione, normal_1) > 0 )
+          this.normal = normal_1;
+        else
+          this.normal = normal_2;
       }
     }
       
@@ -519,6 +515,8 @@ class AmbientLight extends Light {
   constructor(color) {
     super(color);
   }
+
+  source() {return "Ambient";}
 }
 
 class PointLight extends Light{
@@ -526,6 +524,8 @@ class PointLight extends Light{
     super(color);
     this.position = position;
   }
+
+  source() {return "Point";}
 
   getDirection(point) {
     var d = Vector3.subtract([], point, this.position);
@@ -538,6 +538,8 @@ class DirectionalLight extends Light{
     super(color);
     this.direction = direction;
   }
+
+  source() {return "Directional";}
 
   getDirection(point) {
     return Vector3.normalize([],this.direction);
@@ -570,7 +572,7 @@ function init() {
 
 //loads and "parses" the scene file at the given path
 function loadSceneFile(filepath) {
-  scene = Utils.loadJSON(filepath); //load the scene
+  var scene = Utils.loadJSON(filepath); //load the scene
   // console.log(scene.camera); //loading is ok
 
   //set up camera

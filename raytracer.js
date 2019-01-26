@@ -64,7 +64,7 @@ class Camera {
     dir[2] = - d * this.w[2] + u * this.u[2] + v * this.v[2];
 
     var r = new Ray(this.eye, dir, T_MASSIMO);
-    // if (DEBUG) console.log("dir:"+dir);
+    if (DEBUG) console.log("dir:"+dir);
     return r;
     
   }
@@ -215,7 +215,7 @@ class Surface { // così modifichiamo uno shader unico per tutto
         var shadowRay = new Ray(biaspoint,l, Vector3.distance(biaspoint, l));
         var ts = false;
         for(var k = 0; ts == false && k < surfaces.length; k++) {
-          //if (k != this.k) {
+          if (k != this.k) {
             /* var shadowRay_a_trans = surfaces[k].preM_inv_point(shadowRay.getOrigin());
             var shadowRay_dir_trans = surfaces[k].preM_inv_dir(shadowRay.getDirection());
             var shadowRay_trans = new Ray(shadowRay_a_trans, shadowRay_dir_trans); */
@@ -223,8 +223,8 @@ class Surface { // così modifichiamo uno shader unico per tutto
             ts = surfaces[k].intersects(shadowRay_trans);
             if (ts >= Vector3.distance(biaspoint, l)) ts = false; //impedisce al raggio-ombra di andare oltre la luce
 
-            if (DEBUG) console.log(this.k, k, ts);
-          //}
+            //if (DEBUG) console.log(this.k, k, ts);
+          }
         }
 
         if (ts == false) { //se l'oggetto non è in ombra, calcola illuminazione completa
@@ -666,8 +666,8 @@ function render() {
   for (var j = 0; j <= canvas.height; j++) { //indice bordo sinistro se i=0 (bordo destro se i = nx-1)
     for (var i = 0; i <= canvas.width;  i++) {
       bounce = 0;
-      u = (width*i/(canvas.width-1)) - width/2.0;
-      v = (-height*j/(canvas.height-1)) + height/2.0;
+      u = (width * (i-EPSILON) /(canvas.width-1)) - width/2.0;
+      v = (-height * (j-EPSILON) /(canvas.height-1)) + height/2.0;
       
 
       //fire a ray though each pixel
@@ -804,63 +804,3 @@ $(document).ready(function(){
    });
 
 });
-
-
-
-
-/* makeViewMatrix() { //calcola la ViewMatrix
-  var eyeX = this.eye[0], eyeY = this.eye[1], eyeZ = this.eye[2];
-  var centerX = this.at[0], centerY = this.at[1], centerZ = this.at[2];
-  var upX = this.up[0], upY = this.up[1], upZ = this.up[2];
-  var fx, fy, fz, rlf, sx, sy, sz, rls, ux, uy, uz;
-  
-  fx = centerX - eyeX;
-  fy = centerY - eyeY;
-  fz = centerZ - eyeZ;
-  
-  // Normalize f.
-  rlf = 1 / Math.sqrt(fx*fx + fy*fy + fz*fz);
-  fx *= rlf;
-  fy *= rlf;
-  fz *= rlf;
-  
-  // Calculate cross product of f and up.
-  sx = fy * upZ - fz * upY;
-  sy = fz * upX - fx * upZ;
-  sz = fx * upY - fy * upX;
-  
-  // Normalize s.
-  rls = 1 / Math.sqrt(sx*sx + sy*sy + sz*sz);
-  sx *= rls;
-  sy *= rls;
-  sz *= rls;
-  
-  // Calculate cross product of s and f.
-  ux = sy * fz - sz * fy;
-  uy = sz * fx - sx * fz;
-  uz = sx * fy - sy * fx;
-  
-  // Set to this.
-  var e = Matrix4.create();
-  e[0] = sx;
-  e[1] = ux;
-  e[2] = -fx;
-  e[3] = 0;
-  
-  e[4] = sy;
-  e[5] = uy;
-  e[6] = -fy;
-  e[7] = 0;
-  
-  e[8] = sz;
-  e[9] = uz;
-  e[10] = -fz;
-  e[11] = 0;
-  
-  e[12] = 0;
-  e[13] = 0;
-  e[14] = 0;
-  e[15] = 1;
-
-  return e;
-} */

@@ -72,8 +72,8 @@ class Camera {
 
 //Surfaces
 class Surface { // così modifichiamo uno shader unico per tutto
-  constructor(material, transforms, k) {
-    this.k = k;
+  constructor(material, transforms, ID) {
+    this.ID = ID;
     this.material = material;
     this.M_translate = Matrix4.create();
     this.M_rotate = Matrix4.create();
@@ -153,7 +153,7 @@ class Surface { // così modifichiamo uno shader unico per tutto
   shade(ray, point, n) {
     var color = Vector3.create();
     var k = 0;
-    var reflective = this.material.hasOwnProperty("kr") && (this.material.kr[0]+this.material.kr[1]+this.material.kr[2]) > 0;
+    var isReflective = this.material.hasOwnProperty("kr") && (this.material.kr[0]+this.material.kr[1]+this.material.kr[2]) > 0;
 
     // if (DEBUG) console.log("p: ", point);
 
@@ -204,7 +204,7 @@ class Surface { // così modifichiamo uno shader unico per tutto
         r_d = Vector3.normalize([], r_d);
 
         // r rispetto alla vista
-        var nDotv = Vector3.dot(n, v); //coseno dell'angolo tra normale e raggio di luce!
+        var nDotv = Vector3.dot(n, v); //coseno dell'angolo tra normale e raggio di vista!
         var r_v = Vector3.create();
         r_v[0] = 2 * nDotv * n[0] - v[0];
         r_v[1] = 2 * nDotv * n[1] - v[1];
@@ -212,22 +212,25 @@ class Surface { // così modifichiamo uno shader unico per tutto
         r_v = Vector3.normalize([], r_v);
 
         // intersezioni per ombra
-        var shadowRay = new Ray(biaspoint,l, Vector3.distance(biaspoint, l));
+        var shadowRay = new Ray(biaspoint,l, Vector3.distance(biaspoint, l)); 
         var ts = false;
+        if (DEBUG) console.warn("CALCOLO OMBRE");
         for(var k = 0; ts == false && k < surfaces.length; k++) {
-          if (k != this.k) {
+          if (k != this.ID) {
             /* var shadowRay_a_trans = surfaces[k].preM_inv_point(shadowRay.getOrigin());
             var shadowRay_dir_trans = surfaces[k].preM_inv_dir(shadowRay.getDirection());
             var shadowRay_trans = new Ray(shadowRay_a_trans, shadowRay_dir_trans); */
             var shadowRay_trans = surfaces[k].transformRay(shadowRay);
             ts = surfaces[k].intersects(shadowRay_trans);
-            if (ts >= Vector3.distance(biaspoint, l)) ts = false; //impedisce al raggio-ombra di andare oltre la luce
+            //if (ts >= Vector3.distance(biaspoint, l)) ts = false; //impedisce al raggio-ombra di andare oltre la luce
 
-            //if (DEBUG) console.log(this.k, k, ts);
+            //if (DEBUG) console.log(this.ID, k, ts);
           }
         }
 
         if (ts == false) { //se l'oggetto non è in ombra, calcola illuminazione completa
+          
+        
           //* Componente Diffusa
           // if (test < 100000 && nDotL > 0) {console.log(this.material.ka[0], this.material.ka[1], this.material.ka[2]); test++;}
           var nDotL = Vector3.dot(n, l);
@@ -239,6 +242,7 @@ class Surface { // così modifichiamo uno shader unico per tutto
 
           Vector3.add(color, color, diffuse);
         
+          
           //* Componente Speculare (metodo Phong per Ray-Tracing, Lezione 24, slide 34)
           //calcola intensità lobo di luce
           if (bounce == 0)
@@ -272,12 +276,12 @@ class Surface { // così modifichiamo uno shader unico per tutto
           Vector3.add(color, color, specular);
         }
 
-        // Componente Riflessione a Specchio
-        if (bounce < bounce_depth && reflective) {
+        //* Componente Riflessione a Specchio
+        if (bounce < bounce_depth && isReflective) {
           bounce++;
 
           var reflex_ray = new Ray(point, r_d, T_MASSIMO);
-
+          
           var reflex_color = hit(reflex_ray);
           reflex[0] = this.material.kr[0] * reflex_color[0];
           reflex[1] = this.material.kr[1] * reflex_color[1];
@@ -329,17 +333,19 @@ class Sphere extends Surface {
     var ray_e = ray.getOrigin();
     var ray_d = ray.getDirection();
 
+    if (DEBUG) console.warn("SFERA"+this.ID);
+
     //Metodo analitico (Lezione 24, slide 14)
     var p = Vector3.subtract([], ray_e, this.center); //e - c
     var d = ray_d;
     //console.log("p: "+p+"; d: "+d);
     
     var ddotp = Vector3.dot(d,p);
-    if (DEBUG) console.log("d⋅p:"+ddotp);
+    //if (DEBUG) console.log("d⋅p:"+ddotp);
     var psquare = Vector3.dot(p, p);
-    if (DEBUG) console.log("p⋅p: "+psquare);
+    //if (DEBUG) console.log("p⋅p: "+psquare);
     var dsquare = Vector3.dot(d, d);
-    if (DEBUG) console.log("d⋅d"+dsquare);
+    //if (DEBUG) console.log("d⋅d"+dsquare);
     
     var delta = ddotp*ddotp - dsquare*(psquare - this.radius*this.radius);
     if (DEBUG) console.log("delta: "+delta);
@@ -352,6 +358,8 @@ class Sphere extends Surface {
       //Validazione tmin tmax
       if (t1 < T_MINIMO || t1 > ray.tmax) t1 = false; //nota: per js false == 0
       if (t2 < T_MINIMO || t2 > ray.tmax) t2 = false;
+
+      if (DEBUG) console.log("t1: "+t1+"t2: "+t2);
 
       //Quale dei due usiamo??
       if (t1 > EPSILON) return t1;
@@ -413,6 +421,9 @@ class Triangle extends Surface {
   }
 
   intersects(ray) {
+
+    if (DEBUG) console.warn("TRIAN"+this.ID);
+
     var A = Matrix3.fromValues(
       this.a[0]-this.b[0], this.a[0]-this.c[0], ray.dir[0],
       this.a[1]-this.b[1], this.a[1]-this.c[1], ray.dir[1],
@@ -425,7 +436,7 @@ class Triangle extends Surface {
       this.a[2]-ray.a[2]
     ])
     
-    // metodo di cramer come sul libro
+    // metodo di Cramer come sul libro
     // A
     // a = 0    d = 1    g = 2
     // b = 3    e = 4    h = 5
@@ -449,7 +460,9 @@ class Triangle extends Surface {
     var gamma = ( A[8]*( ak_jb ) + A[5]*( jc_al ) + A[2]*( bl_kc ) )/M; //
     var t = - ( A[7]*( ak_jb ) + A[4]*( jc_al ) + A[1]*( bl_kc ) )/M; //
 
-    // cramer
+    if (DEBUG) console.log("beta: "+beta+" gamma: "+gamma);
+    if (DEBUG) console.log("t: "+t);
+
     if (beta > 0 && gamma > 0 && beta+gamma < 1) { // intersezione
       //console.log("ok:"+t);
 
@@ -659,19 +672,20 @@ function loadSceneFile(filepath) {
 
 
 function render() {
-  var u,v,ray,color;
+  var u,v,ray,color, bias;
   //backgroundcolor = [0, 1, 0.2]; //TEST contrasto superfici nere
   var start = Date.now(); //for logging
+  var bias = 0.015; //evita linee nere al confine tra triangoli
 
-  for (var j = 0; j <= canvas.height; j++) { //indice bordo sinistro se i=0 (bordo destro se i = nx-1)
-    for (var i = 0; i <= canvas.width;  i++) {
+  for (var j = 0; j < canvas.height; j++) { //indice bordo sinistro se i=0 (bordo destro se i = nx-1)
+    for (var i = 0; i < canvas.width;  i++) {
       bounce = 0;
-      u = (width * (i-EPSILON) /(canvas.width-1)) - width/2.0;
-      v = (-height * (j-EPSILON) /(canvas.height-1)) + height/2.0;
+      u = ( width * (i + bias) / (canvas.width - 1) ) - width / 2.0;
+      v = ( -height * (j + bias) / (canvas.height - 1) ) + height / 2.0;
       
 
       //fire a ray though each pixel
-      var ray = camera.castRay(u, v);
+      ray = camera.castRay(u, v);
       // if (i == 239 && j == 38) {
       //     console.log(ray); test = 1; }
       color = hit(ray);
@@ -694,7 +708,7 @@ function render() {
 
 function hit(ray) {
   //Calcola l'intersezione raggio-scena
-  var t_min = false; var k_min = 0, ray_min = null;     
+  var t_near = false; var k_near = 0, ray_near = null;     
   for (var k = 0; k < surfaces.length; k++) {
     //trasforma il raggio per rispettare le trasformazioni della superficie corrente
     /* var ray_a_trans = surfaces[k].preM_inv_point(ray.getOrigin());
@@ -708,30 +722,29 @@ function hit(ray) {
 
     //Ricorda l'oggetto intersecato che si trova più vicino alla camera 
     //per calcolare il colore del pixel
-    if (t != false && (t_min == false ||  t <= t_min)) {
-       //TODO: Sostituire le tre variabili con oggetto Intersection
-      t_min = t;
-      k_min = k;
-      var ray_min = ray_trans; //per non ricalcolarlo più tardi
+    if (t != false && (t_near == false ||  t <= t_near)) {
+      t_near = t;
+      k_near = k;
+      var ray_near = ray_trans; //per non ricalcolarlo più tardi
     }
   }
     
-  if (t_min == false) return backgroundcolor;
+  if (t_near == false) return backgroundcolor;
   else {
     //* SHADING
-    ray_trans = ray_min;
+    ray_trans = ray_near;
     //Applico le trasformazioni a pto intersecato e normale
-    var point = ray_trans.pointAt(t_min);
-    var point_trans = surfaces[k_min].preM_point(point);
+    var point = ray_trans.pointAt(t_near);
+    var point_trans = surfaces[k_near].preM_point(point);
 
     // if (DEBUG) console.log(point_trans);
     
-    var n = surfaces[k_min].getNormal(point);
+    var n = surfaces[k_near].getNormal(point);
     // if (i > 200 && i < 220 && j > 100 && j < 120) {console.log(n); setPixel(i, j, [0, 255, 0]);}
-    var n_trans = Vector3.normalize([], surfaces[k_min].preM_normal(n));
+    var n_trans = Vector3.normalize([], surfaces[k_near].preM_normal(n));
 
     //Invocazione shader
-    return surfaces[k_min].shade(ray_trans, point_trans, n_trans);
+    return surfaces[k_near].shade(ray_trans, point_trans, n_trans);
   }
 }
 
@@ -776,31 +789,30 @@ $(document).ready(function(){
 
   });
 
-   //debugging - cast a ray through the clicked pixel with DEBUG messaging on
-   $('#canvas').click(function(e){
-     var x = e.pageX - $('#canvas').offset().left;
-     var y = e.pageY - $('#canvas').offset().top;
-     DEBUG = true;
-
-     var h,w,u,v;
-     //backgroundcolor = [0, 1, 0.2]; //TEST contrasto superfici nere
-     var start = Date.now(); //for logging
+  //debugging - cast a ray through the clicked pixel with DEBUG messaging on
+  $('#canvas').click(function(e){
+    var x = e.pageX - $('#canvas').offset().left;
+    var y = e.pageY - $('#canvas').offset().top;
+    DEBUG = true;
+    //backgroundcolor = [0, 1, 0.2]; //TEST contrasto superfici nere
+    var timer = Date.now(); //for logging
    
-     var ray, color;
-
-     bounce = 0;
-     /* u = (width*i/(canvas.width-1)) - width/2.0;
-     v = (-height*j/(canvas.height-1)) + height/2.0; */
+    var ray, color;
+    bounce = 0;
       
 
-      //fire a ray though each pixel
-      var ray = camera.castRay(u, v);
-      // if (i == 239 && j == 38) {
-      //     console.log(ray); test = 1; }
-      color = hit(ray);
-      setPixel(x, y, [255, 0, 0]);
+    //fire a ray though each pixel
+    var ray = camera.castRay(x, y);
+    console.log("OK");
+    color = hit(ray);
+    console.log("colore ottenuto: "+color);
+    setPixel(x, y, color);
      
-     DEBUG = false;
-   });
+    DEBUG = false;
+
+    timer -= Date.now();
+    console.log("render in "+timer+"s");
+
+  });
 
 });

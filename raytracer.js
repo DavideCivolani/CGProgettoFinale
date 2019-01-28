@@ -27,11 +27,11 @@ var camera;
 var surfaces = [];
 var lights = [];
 
-var bounce = 0;
 var shadow_bias;
 var bounce_depth;
 
 //etc...
+var bounce = 0;
 
 //CLASSES PROTOTYPES
 class Camera {
@@ -41,12 +41,12 @@ class Camera {
     this.at = Vector3.fromValues(at[0],at[1],at[2]);     // Punto verso cui guardo    (?) 
     var dir = Vector3.subtract([], this.at, this.eye);   // Direzione dello sguardo   (g)
 
-    //Ricavo il camera frame {u,v,w} dai vettori eye,at,up (lezione 8, slide 19)
+    // Ricavo il camera frame {u,v,w} dai vettori eye,at,up (lezione 8, slide 19)
     // Il camera frame è necessario per usare le formule nel calcolo delle intersezioni
-    this.w = Vector3.scale([], Vector3.normalize([], dir), -1); //- normalize(dir);
-    this.u = Vector3.normalize([], Vector3.cross([], this.up, this.w)); //normalize(up * w)
-    //this.u = Vector3.cross([], Vector3.normalize([],dir), this.up); //alternativa
-    this.v = Vector3.cross([], this.w, this.u); //w * u;
+    this.w = Vector3.scale([], Vector3.normalize([], dir), -1);           //- normalize(dir);
+    this.u = Vector3.normalize([], Vector3.cross([], this.up, this.w));   //normalize(up * w)
+    //this.u = Vector3.cross([], Vector3.normalize([],dir), this.up);     //(alternativa)
+    this.v = Vector3.cross([], this.w, this.u);                           //w * u;
 
     // console.log(this.w, this.u, this.v);
     this.fovy = fovy;
@@ -68,78 +68,54 @@ class Camera {
 }
 
 //Surfaces
-class Surface { // così modifichiamo uno shader unico per tutto
+class Surface { // così modifichiamo uno shade unico per tutto
   constructor(material, transforms, ID) {
-    this.ID = ID;
+    this.ID = ID; //per debug
     this.material = material;
-    this.M_translate = Matrix4.create();
-    this.M_rotate = Matrix4.create();
-    this.M_scaling = Matrix4.create();
-    this.M_transformation = Matrix4.create();
+    
     this.M = Matrix4.create();
-    for (var i = (transforms.length)-1; i >= 0; i--) { // ordine???????
+    var M_translate = Matrix4.create();
+    var M_rotate = Matrix4.create();
+    var M_scaling = Matrix4.create();
+    var M_transformation = Matrix4.create();
+    for (var i = (transforms.length)-1; i >= 0; i--) {
       switch (transforms[i][0]) {
 
         case "Translate":
-          this.M_translate = Matrix4.fromTranslation([], transforms[i][1]);
-          this.M_transformation = this.M_translate;
+          M_translate = Matrix4.fromTranslation([], transforms[i][1]);
+          M_transformation = M_translate;
           // if (test < 1) {console.log("Mtransl: ", this.M); test++;}
         break;
 
         case "Rotate":
-          this.M_rotate = Matrix4.fromZRotation([], rad(transforms[i][1][2]));
-          this.M_rotate = Matrix4.multiply([], this.M_rotate, Matrix4.fromYRotation([], rad(transforms[i][1][1])));
-          this.M_rotate = Matrix4.multiply([], this.M_rotate, Matrix4.fromXRotation([], rad(transforms[i][1][0])));
-          this.M_transformation = this.M_rotate;
+          M_rotate = Matrix4.fromZRotation([], rad(transforms[i][1][2]));
+          M_rotate = Matrix4.multiply([], M_rotate, Matrix4.fromYRotation([], rad(transforms[i][1][1])));
+          M_rotate = Matrix4.multiply([], M_rotate, Matrix4.fromXRotation([], rad(transforms[i][1][0])));
+          M_transformation = M_rotate;
           // if (test < 1) {console.log( rad(transforms[i][1][0]), rad(transforms[i][1][1]), rad(transforms[i][1][2]) ); test++;}
         break;
 
         case "Scale":
-          this.M_scaling = Matrix4.fromScaling([], transforms[i][1]);
-          this.M_transformation = this.M_scaling;
+          M_scaling = Matrix4.fromScaling([], transforms[i][1]);
+          M_transformation = M_scaling;
           // if (test < 1) {console.log("Mscala: ", this.M); test++;}
         break;
       }
-      this.M = Matrix4.multiply([], this.M_transformation, this.M);
+      this.M = Matrix4.multiply([], M_transformation, this.M);
     }
-    this.M_translate_inv = Matrix4.invert([], this.M_translate);
-    this.M_rotate_inv = Matrix4.invert([], this.M_rotate);
-    this.M_scaling_inv = Matrix4.invert([], this.M_scaling);
 
-    // metodo online
-    // this.M_point_WtoO = Matrix4.multiply([], this.M_translate_inv , Matrix4.multiply([], this.M_rotate_inv, this.M_scaling_inv ) );
-    // this.M_point_OtoW = Matrix4.multiply([], this.M_scaling , Matrix4.multiply([], this.M_rotate, this.M_translate ) );
-
-    // this.M_dir_WtoO = Matrix4.multiply([], this.M_rotate_inv , this.M_scaling_inv );
-    // this.M_norm_OtoW = Matrix4.multiply([], this.M_scaling_inv , this.M_rotate );
-
-    // metodo del prof
     this.M_inv = Matrix4.invert([], this.M);
     this.M_norm = Matrix4.transpose([], this.M_inv);
   }
 
-  preM_inv_point(point) {
-    var temp = Vector4.fromValues(point[0], point[1], point[2], 1);
-    temp = Matrix4.multiply([], this.M_inv, temp);
-    
-    return Vector3.fromValues(temp[0], temp[1], temp[2]);
-  }
-
-  preM_inv_dir(dir) {
-    var temp = Vector4.fromValues(dir[0], dir[1], dir[2], 0);
-    temp = Matrix4.multiply([], this.M_inv, temp);
-    
-    return Vector3.fromValues(temp[0], temp[1], temp[2]);
-  }
-
-  preM_point(point) {
+  transformPoint(point) {
     var temp = Vector4.fromValues(point[0], point[1], point[2], 1);
     temp = Matrix4.multiply([], this.M, temp);
     
     return Vector3.fromValues(temp[0], temp[1], temp[2]);
   }
 
-  preM_normal(normal) {
+  transformNormal(normal) {
     var temp = Vector4.fromValues(normal[0], normal[1], normal[2], 0);
     temp = Matrix4.multiply([], this.M_norm, temp);
     
@@ -152,11 +128,8 @@ class Surface { // così modifichiamo uno shader unico per tutto
     var k = 0;
     var isReflective = this.material.hasOwnProperty("kr") && (this.material.kr[0]+this.material.kr[1]+this.material.kr[2]) > 0;
 
-    // if (DEBUG) console.log("p: ", point);
-
-    //Calcolo il vettore vista (lo faccio qui perchè tanto non cambia rispetto alle luci)
-    //var v = Vector3.scale([],ray.dir,-1); //v -> camera direction (view)
-    var v = Vector3.subtract([], camera.eye, point); //uguale a sopra perchè il raggio è emesso dalla camera!
+    //Calcolo il vettore vista
+    var v = Vector3.subtract([], camera.eye, point); //v -> camera direction (view)
     v = Vector3.normalize([], v);
 
     //Calcolo illuminazione
@@ -172,14 +145,12 @@ class Surface { // così modifichiamo uno shader unico per tutto
         ambient = Vector3.multiply([], this.material.ka, light.color);
         Vector3.add(color, color, ambient);
       }
-      else { //Luci Direzionali e Puntiformi (le luci ambientali non influenzano comp. diffusa e speculare)
+      else { 
+        //Luci Direzionali e Puntiformi 
+        //le luci ambientali non influenzano comp. diffusa e speculare
 
         //Ombre
         var l = Vector3.normalize([], Vector3.scale([],light.getDirection(point), -1)); //prende la direzione giusta a seconda del tipo di luce
-        // if (scene.lights[i].source == "Point")
-        //   var l = Vector3.normalize([], Vector3.subtract([], scene.lights[i].position, point));
-        // else if (scene.lights[i].source == "Directional")
-        //   var l = Vector3.normalize([], Vector3.scale([], scene.lights[i].direction));
         var biaspoint = Vector3.scale([],n,shadow_bias); //aggiunge il bias in direzione della normale per evitare di peggiorare l'errore
         biaspoint = Vector3.add([],point,biaspoint); 
 
@@ -214,14 +185,10 @@ class Surface { // così modifichiamo uno shader unico per tutto
         if (DEBUG) console.warn("CALCOLO OMBRE");
         for(var k = 0; ts == false && k < surfaces.length; k++) {
           if (k != this.ID) {
-            /* var shadowRay_a_trans = surfaces[k].preM_inv_point(shadowRay.getOrigin());
-            var shadowRay_dir_trans = surfaces[k].preM_inv_dir(shadowRay.getDirection());
-            var shadowRay_trans = new Ray(shadowRay_a_trans, shadowRay_dir_trans); */
             var shadowRay_trans = surfaces[k].transformRay(shadowRay);
             ts = surfaces[k].intersects(shadowRay_trans);
-            //if (ts >= Vector3.distance(biaspoint, l)) ts = false; //impedisce al raggio-ombra di andare oltre la luce
-
-            //if (DEBUG) console.log(this.ID, k, ts);
+            
+            if (DEBUG) console.log(this.ID, k, ts);
           }
         }
 
@@ -229,7 +196,6 @@ class Surface { // così modifichiamo uno shader unico per tutto
           
         
           //* Componente Diffusa
-          // if (test < 100000 && nDotL > 0) {console.log(this.material.ka[0], this.material.ka[1], this.material.ka[2]); test++;}
           var nDotL = Vector3.dot(n, l);
           nDotL = Math.max(nDotL, 0.0);
           
@@ -253,23 +219,6 @@ class Surface { // così modifichiamo uno shader unico per tutto
           specular[1] = light.color[1] * this.material.ks[1] * shine;
           specular[2] = light.color[2] * this.material.ks[2] * shine;
         
-          
-          /* //Componente Speculare (metodo libro)
-          //var v = Vector3.normalize([], Vector3.subtract([], camera.eye, point)); //norm(cameraPos - point)
-          var h = Vector3.normalize([], Vector3.add([], v, l) ); //norm( v + l )
-          var nDoth = Vector3.dot(n, h);
-          nDoth = Math.max(nDoth, 0.0);
-          if (test < 20) console.log("nDoth: "+nDoth);
-            
-          //calcola la componente speculare = color*materiale.ks * (hDotN ^ materiale.specular)
-          specular[0] = light.color[0] * this.material.ks[0] * Math.pow(nDoth, this.material.shininess);
-          specular[1] = light.color[1] * this.material.ks[1] * Math.pow(nDoth, this.material.shininess);
-          specular[2] = light.color[2] * this.material.ks[2] * Math.pow(nDoth, this.material.shininess);
-          */
-          //if (test < 20) console.log("specular: "+specular);
-          //if (test<20) console.log("intensity: "+intensity);
-
-          //if (test < 1) { console.log(this.material.ks); test++; }
           Vector3.add(color, color, specular);
         }
 
@@ -286,7 +235,7 @@ class Surface { // così modifichiamo uno shader unico per tutto
 
           Vector3.add(color, color, reflex);
           
-          // if (test < 10) {console.log(bounce_depth); test++;}
+          if (DEBUG) {console.log(bounce_depth); test++;}
         }
 
       }
@@ -306,22 +255,14 @@ class Surface { // così modifichiamo uno shader unico per tutto
      temp = Matrix4.multiply([], this.M_inv, temp);
      var ray_d = Vector3.fromValues(temp[0], temp[1], temp[2]); //direzione trasformata
  
-     //if (test < 1) {console.log(ray_e, ray_d); test++;}
      return new Ray(ray_e, ray_d, ray.tmax);
   }
 
-  transformNormal(normal) { //NOTA: non più utilizzata
-    var temp;
-    temp = Vector4.fromValues(normal[0],normal[1],normal[2],0);
-    temp = Matrix4.multiply([], this.M_norm, temp);
-    return Vector3.fromValues(temp[0], temp[1], temp[2]);
-  }
 }
 
 class Sphere extends Surface {
   constructor(center, radius, material, transforms, k) {
     super(material, transforms, k);
-    // super(transforms);
     this.center = center;
     this.radius = radius;
   }
@@ -335,14 +276,10 @@ class Sphere extends Surface {
     //Metodo analitico (Lezione 24, slide 14)
     var p = Vector3.subtract([], ray_e, this.center); //e - c
     var d = ray_d;
-    //console.log("p: "+p+"; d: "+d);
     
     var ddotp = Vector3.dot(d,p);
-    //if (DEBUG) console.log("d⋅p:"+ddotp);
     var psquare = Vector3.dot(p, p);
-    //if (DEBUG) console.log("p⋅p: "+psquare);
     var dsquare = Vector3.dot(d, d);
-    //if (DEBUG) console.log("d⋅d"+dsquare);
     
     var delta = ddotp*ddotp - dsquare*(psquare - this.radius*this.radius);
     if (DEBUG) console.log("delta: "+delta);
@@ -369,7 +306,6 @@ class Sphere extends Surface {
   getNormal(point) {
     var n = Vector3.create();
     n = Vector3.subtract([], point, this.center);
-    //n = Vector3.subtract([], this.center, point); //Inverte la normale (TEST)
     n = Vector3.normalize([], n);
     return n;
   }
@@ -380,9 +316,9 @@ class Triangle extends Surface {
   constructor(p1, p2, p3, material, transforms, k) {
     super(material, transforms, k);
 
-    this.a = p1; // a
-    this.b = p2; // b
-    this.c = p3; // c
+    this.a = p1;
+    this.b = p2;
+    this.c = p3;
 
     //Normale
     var a_b = Vector3.subtract([], this.a, this.b);
@@ -411,10 +347,6 @@ class Triangle extends Surface {
           this.normal = normal_2;
       }
     }
-      
-
-    // this.normal = this.normal_1;
-    // if (test < 1) { console.log(this.normal); test++; }
   }
 
   intersects(ray) {
@@ -461,7 +393,6 @@ class Triangle extends Surface {
     if (DEBUG) console.log("t: "+t);
 
     if (beta > 0 && gamma > 0 && beta+gamma < 1) { // intersezione
-      //console.log("ok:"+t);
 
       //Validazione tmin tmax
       if (t > EPSILON && t >= T_MINIMO && t <= ray.tmax) return t;
@@ -570,21 +501,19 @@ function init() {
   imageBuffer = context.createImageData(canvas.width, canvas.height); //buffer for pixels
   
   //TEST Renderizza automaticamente al caricamento
-  loadSceneFile('assets/'+$('#scene_file_input').val()+'.json');
+  //loadSceneFile('assets/'+$('#scene_file_input').val()+'.json');
 
-  render();
+  //render();
 }
 
 
 //loads and "parses" the scene file at the given path
 function loadSceneFile(filepath) {
   var scene = Utils.loadJSON(filepath); //load the scene
-  // console.log(scene.camera); //loading is ok
 
   //set up camera
   aspect = scene.camera.aspect;
   camera = new Camera(scene.camera.eye, scene.camera.up, scene.camera.at, scene.camera.fovy);
-  // camera.makeViewMatrix(); //a che serve?
 
   //set up lights
   lights = [];
@@ -637,8 +566,6 @@ function loadSceneFile(filepath) {
       surfaces.push(new Triangle(scene.surfaces[i].p1, scene.surfaces[i].p2, scene.surfaces[i].p3, mat, transforms, i));
     }
 
-    //console.log(surfaces[i]);
-
   }
 
   // materials = [];
@@ -678,17 +605,10 @@ function render() {
       u = ( width * (i + bias) / (canvas.width) ) - width / 2.0;
       v = ( -height * (j + bias) / (canvas.height) ) + height / 2.0;
       
-
-      //fire a ray though each pixel
       ray = camera.castRay(u, v);
-      // if (i == 239 && j == 38) {
-      //     console.log(ray); test = 1; }
       color = hit(ray);
       setPixel(i, j, color);
-      // if (i == 239 && j == 38) {
-      //   if (color == backgroundcolor) setPixel(i,j,[255, 0, 0]);
-      //   else setPixel(i, j, [0, 255, 0]);
-      //   }
+
     }
   }
 
@@ -706,15 +626,11 @@ function hit(ray) {
   var t_near = false; var k_near = 0, ray_near = null;     
   for (var k = 0; k < surfaces.length; k++) {
     //trasforma il raggio per rispettare le trasformazioni della superficie corrente
-    /* var ray_a_trans = surfaces[k].preM_inv_point(ray.getOrigin());
-    var ray_dir_trans = surfaces[k].preM_inv_dir(ray.getDirection());
-    var ray_trans = new Ray(ray_a_trans, ray_dir_trans, ray.tmax); */
+    var ray_trans = surfaces[k].transformRay(ray);
     
     //Intersezione con l'oggetto corrente
-    var ray_trans = surfaces[k].transformRay(ray);
     var t = surfaces[k].intersects(ray_trans);
-    //if (t <= T_MINIMO || t >= T_MASSIMO || t < EPSILON) t = false; //validazione generale in intersect
-
+    
     //Ricorda l'oggetto intersecato che si trova più vicino alla camera 
     //per calcolare il colore del pixel
     if (t != false && (t_near == false ||  t <= t_near)) {
@@ -728,15 +644,13 @@ function hit(ray) {
   else {
     //* SHADING
     ray_trans = ray_near;
+    
     //Applico le trasformazioni a pto intersecato e normale
     var point = ray_trans.pointAt(t_near);
-    var point_trans = surfaces[k_near].preM_point(point);
-
-    // if (DEBUG) console.log(point_trans);
+    var point_trans = surfaces[k_near].transformPoint(point);
     
     var n = surfaces[k_near].getNormal(point);
-    // if (i > 200 && i < 220 && j > 100 && j < 120) {console.log(n); setPixel(i, j, [0, 255, 0]);}
-    var n_trans = Vector3.normalize([], surfaces[k_near].preM_normal(n));
+    var n_trans = Vector3.normalize([], surfaces[k_near].transformNormal(n));
 
     //Invocazione shader
     return surfaces[k_near].shade(ray_trans, point_trans, n_trans);

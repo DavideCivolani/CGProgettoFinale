@@ -1,8 +1,6 @@
 "use strict";
-//prova
 
 var test = 0;
-var objpointer = null;
 
 //ALIAS UTILI
 var Vector3 = glMatrix.vec3;
@@ -28,7 +26,6 @@ var backgroundcolor = [0,0,0];
 var camera;
 var surfaces = [];
 var lights = [];
-// var materials = [];
 
 var bounce = 0;
 var shadow_bias;
@@ -303,11 +300,11 @@ class Surface { // così modifichiamo uno shader unico per tutto
 
      temp = Vector4.fromValues(ray.a[0],ray.a[1],ray.a[2],1);
      temp = Matrix4.multiply([], this.M_inv, temp);
-     var ray_e = Vector3.fromValues(temp[0], temp[1], temp[2]); //origine "trasformata"
+     var ray_e = Vector3.fromValues(temp[0], temp[1], temp[2]); //origine trasformata
 
      temp = Vector4.fromValues(ray.dir[0],ray.dir[1],ray.dir[2],0);
      temp = Matrix4.multiply([], this.M_inv, temp);
-     var ray_d = Vector3.fromValues(temp[0], temp[1], temp[2]); //direzione "trasformata"
+     var ray_d = Vector3.fromValues(temp[0], temp[1], temp[2]); //direzione trasformata
  
      //if (test < 1) {console.log(ray_e, ray_d); test++;}
      return new Ray(ray_e, ray_d, ray.tmax);
@@ -474,10 +471,6 @@ class Triangle extends Surface {
   }
 
   getNormal(point) {
-    return this.getNormal();
-  }
-
-  getNormal() {
     //return Vector3.scale([], this.normal, -1); //TEST inverte direzione normale
     return this.normal;
   }
@@ -560,7 +553,7 @@ class DirectionalLight extends Light{
 }
 
 
-// class Material { //Forse è sufficiente usare i file caricati dal json
+// class Material { //É sufficiente usare le struct caricate dal json
 //   constructor(ka, kd, ks, shininess) {
 //     this.ka = ka;
 //     this.kd = kd;
@@ -576,7 +569,7 @@ function init() {
   context = canvas.getContext("2d");
   imageBuffer = context.createImageData(canvas.width, canvas.height); //buffer for pixels
   
-  //TEST: Renderizza automaticamente al caricamento
+  //TEST Renderizza automaticamente al caricamento
   loadSceneFile('assets/'+$('#scene_file_input').val()+'.json');
 
   render();
@@ -659,7 +652,7 @@ function loadSceneFile(filepath) {
   shadow_bias = scene.shadow_bias;
   bounce_depth = scene.bounce_depth;
 
-  //TEST - Carica immagine comparativa
+  //TEST Carica immagine comparativa
   var testname = 'examples/'+$('#scene_file_input').val()+'.png'
   var _img = document.getElementById('example');
   var newImg = new Image;
@@ -674,14 +667,16 @@ function loadSceneFile(filepath) {
 function render() {
   var u,v,ray,color, bias;
   //backgroundcolor = [0, 1, 0.2]; //TEST contrasto superfici nere
+  var bias = 0.5005;    //allinea (u,v) al centro del pixel. 
+                        //Un valore leggermente > 0.5 riduce gli effetti degl errori di approsimazione (linee nere)
+  
   var start = Date.now(); //for logging
-  var bias = 0.015; //evita linee nere al confine tra triangoli
 
   for (var j = 0; j < canvas.height; j++) { //indice bordo sinistro se i=0 (bordo destro se i = nx-1)
     for (var i = 0; i < canvas.width;  i++) {
       bounce = 0;
-      u = ( width * (i + bias) / (canvas.width - 1) ) - width / 2.0;
-      v = ( -height * (j + bias) / (canvas.height - 1) ) + height / 2.0;
+      u = ( width * (i + bias) / (canvas.width) ) - width / 2.0;
+      v = ( -height * (j + bias) / (canvas.height) ) + height / 2.0;
       
 
       //fire a ray though each pixel
@@ -780,7 +775,7 @@ $(document).ready(function(){
     render();
   });
 
-  //TEST - switch tra immagine renderizzata ed esempio
+  //TEST switch tra immagine renderizzata ed esempio
   $('#example_button').click(function() {
   
     $('#example').toggle();

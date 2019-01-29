@@ -31,7 +31,6 @@ var shadow_bias;
 var bounce_depth;
 
 //etc...
-var bounce = 0;
 
 //CLASSES PROTOTYPES
 class Camera {
@@ -123,7 +122,7 @@ class Surface { // così modifichiamo uno shade unico per tutto
   }
 
 
-  shade(ray, point, n) {
+  shade(ray, point, n, bounce) {
     var color = Vector3.create();
     var k = 0;
     var isReflective = this.material.hasOwnProperty("kr") && (this.material.kr[0]+this.material.kr[1]+this.material.kr[2]) > 0;
@@ -228,7 +227,7 @@ class Surface { // così modifichiamo uno shade unico per tutto
 
           var reflex_ray = new Ray(point, r_d, T_MASSIMO);
           
-          var reflex_color = hit(reflex_ray);
+          var reflex_color = hit(reflex_ray, bounce);
           reflex[0] = this.material.kr[0] * reflex_color[0];
           reflex[1] = this.material.kr[1] * reflex_color[1];
           reflex[2] = this.material.kr[2] * reflex_color[2];
@@ -592,7 +591,7 @@ function loadSceneFile(filepath) {
 
 
 function render() {
-  var u,v,ray,color, bias;
+  var u,v, ray, color, bias, bounce;
   //backgroundcolor = [0, 1, 0.2]; //TEST contrasto superfici nere
   var bias = 0.5005;    //allinea (u,v) al centro del pixel. 
                         //Un valore leggermente > 0.5 riduce gli effetti degl errori di approsimazione (linee nere)
@@ -606,7 +605,7 @@ function render() {
       v = ( -height * (j + bias) / (canvas.height) ) + height / 2.0;
       
       ray = camera.castRay(u, v);
-      color = hit(ray);
+      color = hit(ray, bounce);
       setPixel(i, j, color);
 
     }
@@ -621,7 +620,7 @@ function render() {
 
 }
 
-function hit(ray) {
+function hit(ray, bounce) {
   //Calcola l'intersezione raggio-scena
   var t_near = false; var k_near = 0, ray_near = null;     
   for (var k = 0; k < surfaces.length; k++) {
@@ -653,7 +652,7 @@ function hit(ray) {
     var n_trans = Vector3.normalize([], surfaces[k_near].transformNormal(n));
 
     //Invocazione shader
-    return surfaces[k_near].shade(ray_trans, point_trans, n_trans);
+    return surfaces[k_near].shade(ray_trans, point_trans, n_trans, bounce);
   }
 }
 
@@ -713,7 +712,7 @@ $(document).ready(function(){
     //fire a ray though each pixel
     var ray = camera.castRay(x, y);
     console.log("OK");
-    color = hit(ray);
+    color = hit(ray, bounce);
     console.log("colore ottenuto: "+color);
     setPixel(x, y, color);
      

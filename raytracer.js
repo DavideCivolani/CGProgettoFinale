@@ -44,7 +44,6 @@ class Camera {
     // Il camera frame è necessario per usare le formule nel calcolo delle intersezioni
     this.w = Vector3.scale([], Vector3.normalize([], dir), -1);           //- normalize(dir);
     this.u = Vector3.normalize([], Vector3.cross([], this.up, this.w));   //normalize(up * w)
-    //this.u = Vector3.cross([], Vector3.normalize([],dir), this.up);     //(alternativa)
     this.v = Vector3.cross([], this.w, this.u);                           //w * u;
 
     // console.log(this.w, this.u, this.v);
@@ -169,14 +168,6 @@ class Surface { // così modifichiamo uno shade unico per tutto
         r_d[1] = norm_dir[1] - 2 * (dDotn) * n[1];
         r_d[2] = norm_dir[2] - 2 * (dDotn) * n[2];
         r_d = Vector3.normalize([], r_d);
-
-        // r rispetto alla vista
-        var nDotv = Vector3.dot(n, v); //coseno dell'angolo tra normale e raggio di vista!
-        var r_v = Vector3.create();
-        r_v[0] = 2 * nDotv * n[0] - v[0];
-        r_v[1] = 2 * nDotv * n[1] - v[1];
-        r_v[2] = 2 * nDotv * n[2] - v[2];
-        r_v = Vector3.normalize([], r_v);
 
         // intersezioni per ombra
         var shadowRay = new Ray(biaspoint,l, Vector3.distance(biaspoint, l)); 
@@ -706,7 +697,7 @@ $(document).ready(function(){
     var timer = Date.now(); //for logging
    
     var ray, color;
-    bounce = 0;
+    var bounce = 0;
       
 
     //fire a ray though each pixel

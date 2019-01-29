@@ -174,12 +174,12 @@ class Surface { // così modifichiamo uno shade unico per tutto
         var ts = false;
         if (DEBUG) console.warn("CALCOLO OMBRE");
         for(var k = 0; ts == false && k < surfaces.length; k++) {
-          if (k != this.ID) {
+          //if (k != this.ID) {
             var shadowRay_trans = surfaces[k].transformRay(shadowRay);
             ts = surfaces[k].intersects(shadowRay_trans);
             
             if (DEBUG) console.log(this.ID, k, ts);
-          }
+          //}
         }
 
         if (ts == false) { //se l'oggetto non è in ombra, calcola illuminazione completa
